@@ -9,6 +9,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
     <artifactId>keyvalue-test</artifactId>
+    <name>Key-Value - Test suite</name>
     <dependencies>
         <dependency>
             <groupId>com.ethlo.keyvalue</groupId>
