@@ -43,6 +43,10 @@ public class UnsignedUtil
                     MAX_UNSIGNED_40BIT_INT_VALUE, MAX_UNSIGNED_48BIT_INT_VALUE, MAX_UNSIGNED_56BIT_INT_VALUE, MAX_UNSIGNED_63BIT_INT_VALUE
             };
 
+    private UnsignedUtil()
+    {
+    }
+
     public static byte[] encodeUnsigned(long value, int length)
     {
         assertValueFits(value, length, getMaxSize(length));
@@ -126,11 +130,11 @@ public class UnsignedUtil
         for (int i = 0; i < length - 1; i++)
         {
             final byte b = data[i + offset];
-            l |= ((long) b) & MAX_UNSIGNED_8BIT_INT_VALUE;
+            l |= b & MAX_UNSIGNED_8BIT_INT_VALUE;
             l <<= BITS_IN_BYTE;
         }
         final byte b = data[offset + length - 1];
-        l |= ((long) b) & MAX_UNSIGNED_8BIT_INT_VALUE;
+        l |= b & MAX_UNSIGNED_8BIT_INT_VALUE;
         return l;
     }
 
@@ -144,7 +148,7 @@ public class UnsignedUtil
         if (value <= MAX_UNSIGNED_48BIT_INT_VALUE)
         {
             // Higher values than this loses precision in double division
-            final int bits = (int) (Math.ceil(Math.log(value + 1) / LOG2));
+            final int bits = (int) (Math.ceil(Math.log(value + 1D) / LOG2));
             return (int) Math.ceil(bits / 8D);
         }
         else if (value <= MAX_UNSIGNED_56BIT_INT_VALUE)

@@ -320,13 +320,16 @@ public class MysqlClientImpl implements MysqlClient
 
             private void tryClose(AutoCloseable closeable)
             {
-                try
+                if (closeable != null)
                 {
-                    closeable.close();
-                }
-                catch (Exception e)
-                {
-                    // Nothing more we can do
+                    try
+                    {
+                        closeable.close();
+                    }
+                    catch (Exception e)
+                    {
+                        // Nothing more we can do
+                    }
                 }
             }
 

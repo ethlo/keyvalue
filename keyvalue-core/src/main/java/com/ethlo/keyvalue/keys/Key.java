@@ -25,8 +25,6 @@ import java.io.Serializable;
 
 public abstract class Key<T> implements Serializable, Externalizable, Comparable<T>
 {
-    private static final long serialVersionUID = 361003700255254340L;
-
     public abstract boolean equals(Object b);
 
     public abstract int hashCode();

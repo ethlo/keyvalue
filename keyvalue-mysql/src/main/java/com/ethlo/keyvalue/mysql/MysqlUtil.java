@@ -69,7 +69,7 @@ public class MysqlUtil
                 "cas_column INT NOT NULL, " +
                 "expire_time_column INT, " +
                 "flags INT) " +
-                "ENGINE=INNODB", new TreeMap<String, String>());
+                "ENGINE=INNODB", new TreeMap<>());
     }
 
     boolean tableExists(String dbName)

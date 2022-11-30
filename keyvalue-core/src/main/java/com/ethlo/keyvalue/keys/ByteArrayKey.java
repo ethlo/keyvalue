@@ -29,8 +29,6 @@ import com.ethlo.binary.Hex;
 
 public class ByteArrayKey extends Key<ByteArrayKey>
 {
-    private static final long serialVersionUID = -6752644647644955221L;
-
     private byte[] keyData;
 
     public ByteArrayKey()
@@ -50,11 +48,15 @@ public class ByteArrayKey extends Key<ByteArrayKey>
     @Override
     public boolean equals(Object b)
     {
-        if (b instanceof ByteArrayKey)
+        if (b == this)
         {
-            return Arrays.equals(keyData, ((ByteArrayKey) b).keyData);
+            return true;
         }
-        return false;
+        else if (b == null || b.getClass() != this.getClass())
+        {
+            return false;
+        }
+        return Arrays.equals(keyData, ((ByteArrayKey) b).keyData);
     }
 
     @Override
