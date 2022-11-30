@@ -20,6 +20,11 @@ package com.ethlo.keyvalue;
  * #L%
  */
 
+import java.util.Map;
+
+import org.springframework.data.util.CloseableIterator;
+
+import com.ethlo.keyvalue.keys.ByteArrayKey;
 import com.ethlo.keyvalue.keys.Key;
 
 /**
@@ -27,5 +32,7 @@ import com.ethlo.keyvalue.keys.Key;
  */
 public interface IterableKeyValueDb<K extends Key<K>, V> extends KeyValueDb<K, V>
 {
-    SeekableIterator<K, V> iterator();
+    CloseableIterator<Map.Entry<ByteArrayKey, byte[]>> iterator();
+
+    CloseableIterator<Map.Entry<ByteArrayKey, byte[]>> iteratorFromPrefix(ByteArrayKey keyPrefix);
 }

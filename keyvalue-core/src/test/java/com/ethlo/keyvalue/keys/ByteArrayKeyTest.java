@@ -29,22 +29,22 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.charset.StandardCharsets;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-public class ByteArrayKeyTest
+
+class ByteArrayKeyTest
 {
     @Test
-    public void testHashCode()
+    void testHashCode()
     {
         final byte[] keyData = "eatme".getBytes(StandardCharsets.UTF_8);
         final ByteArrayKey b1 = new ByteArrayKey(keyData);
         final ByteArrayKey b2 = new ByteArrayKey(keyData);
-        Assert.assertEquals(b1.hashCode(), b2.hashCode());
+        assertThat(b1.hashCode()).isEqualTo(b2.hashCode());
     }
 
     @Test
-    public void testEquals()
+    void testEquals()
     {
         final ByteArrayKey b1 = new ByteArrayKey("eatme".getBytes(StandardCharsets.UTF_8));
         final ByteArrayKey b2 = new ByteArrayKey("eatme".getBytes(StandardCharsets.UTF_8));
@@ -52,12 +52,11 @@ public class ByteArrayKeyTest
 
         assertThat(b1).isEqualTo(b2);
         assertThat(b2).isEqualTo(b1);
-        assertThat(c1).isNotEqualTo(b1);
-        assertThat(c1).isNotEqualTo(b2);
+        assertThat(c1).isNotEqualTo(b1).isNotEqualTo(b2);
     }
 
     @Test
-    public void testSerializeAndDeserialize() throws IOException, ClassNotFoundException
+    void testSerializeAndDeserialize() throws IOException, ClassNotFoundException
     {
         // Serialize
         final ByteArrayKey b1 = new ByteArrayKey("eatme".getBytes(StandardCharsets.UTF_8));
@@ -68,7 +67,7 @@ public class ByteArrayKeyTest
 
         // Deserialize
         final ByteArrayKey b2 = (ByteArrayKey) new ObjectInputStream(new ByteArrayInputStream(bout.toByteArray())).readObject();
-        Assert.assertArrayEquals(b1.getByteArray(), b1.getByteArray());
-        Assert.assertEquals(b1, b2);
+        assertThat(b1.getByteArray()).isEqualTo(b1.getByteArray());
+        assertThat(b1).isEqualTo(b2);
     }
 }

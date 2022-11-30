@@ -53,23 +53,15 @@ public class TransparentCasKeyValueDb<K extends Key<K>, V, C extends Comparable<
     @Override
     public V get(K key)
     {
-        final CasHolder<K, V, C> casHolder = this.db.getCas(key);
+        final CasHolder<K, V, C> casHolder = db.getCas(key);
         if (casHolder != null)
         {
             final C currentCasValue = casHolder.getCasValue();
-            //
-            //			// Optimization, fail early if data has been modified
-            //			final Optional<C> prevCasValue = this.revisionHolder.get(casHolder.getKey());
-            //			if (prevCasValue != null && prevCasValue.isPresent() && !currentCasValue.equals(prevCasValue.get()))
-            //			{
-            //				throw new ConcurrentModificationException("Value for key " + key + " has been concurrently modified");
-            //			}
-            //
-            this.revisionHolder.put(key, ValueHolder.of(currentCasValue));
+            revisionHolder.put(key, ValueHolder.of(currentCasValue));
             logger.debug("get({}) with CAS value {}", key, currentCasValue);
             return casHolder.getValue();
         }
-        this.revisionHolder.put(key, ValueHolder.empty());
+        revisionHolder.put(key, ValueHolder.empty());
         logger.debug("get({}) with empty result", key);
         return null;
     }
@@ -77,14 +69,14 @@ public class TransparentCasKeyValueDb<K extends Key<K>, V, C extends Comparable<
     @Override
     public void put(K key, V value)
     {
-        final ValueHolder<C> casValue = this.revisionHolder.get(key);
+        final ValueHolder<C> casValue = revisionHolder.get(key);
         if (casValue != null)
         {
             final C cas = casValue.orElse(null);
             logger.debug("put({}) with CAS value {}", key, cas);
             try
             {
-                this.db.putCas(new CasHolder<>(cas, key, value));
+                db.putCas(new CasHolder<>(cas, key, value));
             } finally
             {
                 this.revisionHolder.remove(key);
@@ -124,7 +116,6 @@ public class TransparentCasKeyValueDb<K extends Key<K>, V, C extends Comparable<
 
     private static class ValueHolder<T>
     {
-        private static final ValueHolder<?> EMPTY = new ValueHolder<>();
         private final T value;
 
         private ValueHolder()
@@ -132,14 +123,14 @@ public class TransparentCasKeyValueDb<K extends Key<K>, V, C extends Comparable<
             this.value = null;
         }
 
-        public static <T> ValueHolder<T> empty()
-        {
-            return (ValueHolder<T>) EMPTY;
-        }
-
         private ValueHolder(T value)
         {
             this.value = Objects.requireNonNull(value);
+        }
+
+        public static <T> ValueHolder<T> empty()
+        {
+            return new ValueHolder<>();
         }
 
         public static <T> ValueHolder<T> of(T value)
@@ -194,14 +185,13 @@ public class TransparentCasKeyValueDb<K extends Key<K>, V, C extends Comparable<
             {
                 return true;
             }
-            else if (!(obj instanceof ValueHolder))
+            else if (obj == null || obj.getClass() != ValueHolder.class)
             {
                 return false;
             }
             else
             {
-                ValueHolder<?> other = (ValueHolder<?>) obj;
-                return Objects.equals(this.value, other.value);
+                return Objects.equals(this.value, ((ValueHolder<?>) obj).value);
             }
         }
 

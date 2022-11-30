@@ -20,12 +20,21 @@ package com.ethlo.keyvalue.mysql;
  * #L%
  */
 
+import javax.sql.DataSource;
+
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import com.ethlo.keyvalue.KeyValueDbManager;
 
 @EnableAutoConfiguration
 @Configuration
 public class TestCfg
 {
-
+    @Bean
+    KeyValueDbManager<MysqlClient> mysqlClientManager(DataSource dataSource)
+    {
+        return new MysqlClientManagerImpl<>(dataSource);
+    }
 }

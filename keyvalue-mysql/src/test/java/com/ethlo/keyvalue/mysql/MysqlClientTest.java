@@ -20,19 +20,23 @@ package com.ethlo.keyvalue.mysql;
  * #L%
  */
 
-import com.ethlo.keyvalue.SeekableIterator;
-import com.ethlo.keyvalue.cas.CasHolder;
-import com.ethlo.keyvalue.keys.ByteArrayKey;
-import com.google.common.base.Function;
-import com.google.common.collect.Iterators;
-import org.junit.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
-public abstract class MysqlClientTest extends AbstractTest
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.stream.StreamSupport;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.data.util.CloseableIterator;
+
+import com.ethlo.keyvalue.cas.CasHolder;
+import com.ethlo.keyvalue.keys.ByteArrayKey;
+
+class MysqlClientTest extends AbstractTest
 {
     final ByteArrayKey keyBytes0 = new ByteArrayKey(new byte[]{0, 0});
     final ByteArrayKey keyBytes1 = new ByteArrayKey(new byte[]{1, 0});
@@ -41,7 +45,7 @@ public abstract class MysqlClientTest extends AbstractTest
     final ByteArrayKey keyBytes4 = new ByteArrayKey(new byte[]{2, 0});
 
     @Test
-    public void testGetAll()
+    void testGetAll()
     {
         final Map<ByteArrayKey, byte[]> data = createFiveEntries();
         db.putAll(data);
@@ -57,7 +61,7 @@ public abstract class MysqlClientTest extends AbstractTest
     }
 
     @Test
-    public void putAndGetCompare()
+    void putAndGetCompare()
     {
         final ByteArrayKey keyBytes = new ByteArrayKey(new byte[]{0, 1, 2, 3, 4, 5, 6, 7});
         final byte[] valueBytes = "ThisIsTheDataToStoreSoLetsMakeItABitLonger".getBytes(StandardCharsets.UTF_8);
@@ -67,7 +71,7 @@ public abstract class MysqlClientTest extends AbstractTest
     }
 
     @Test
-    public void putAll()
+    void putAll()
     {
         final ByteArrayKey keyBytes1 = new ByteArrayKey(new byte[]{0, 1, 2, 3, 4, 5, 6, 7});
         final ByteArrayKey keyBytes2 = new ByteArrayKey(new byte[]{0, 1, 2, 3, 4, 5, 6, 8});
@@ -86,7 +90,7 @@ public abstract class MysqlClientTest extends AbstractTest
     }
 
     @Test
-    public void testCas()
+    void testCas()
     {
         final ByteArrayKey keyBytes = new ByteArrayKey(new byte[]{4, 5, 6, 7, 9, 9});
         final byte[] valueBytes = "ThisIsTheDataToStoreSoLetsmakeItABitLonger".getBytes(StandardCharsets.UTF_8);
@@ -106,19 +110,16 @@ public abstract class MysqlClientTest extends AbstractTest
     }
 
     @Test
-    public void testIterate()
+    void testIterate()
     {
         final Map<ByteArrayKey, byte[]> data = createFiveEntries();
         db.putAll(data);
 
-        int count;
-        try (final SeekableIterator<ByteArrayKey, byte[]> iter = db.iterator())
+        final ByteArrayKey prefixKey = new ByteArrayKey(new byte[]{1});
+        try (final CloseableIterator<Map.Entry<ByteArrayKey, byte[]>> iter = db.iteratorFromPrefix(prefixKey))
         {
-            final ByteArrayKey prefixKey = new ByteArrayKey(new byte[]{1});
-            assertThat(iter.seekTo(prefixKey)).isTrue();
-            count = Iterators.size(iter);
+            assertThat(StreamSupport.stream(iter.spliterator(), false).toList()).hasSize(3);
         }
-        assertThat(count).isEqualTo(3);
     }
 
     private Map<ByteArrayKey, byte[]> createFiveEntries()
@@ -134,7 +135,7 @@ public abstract class MysqlClientTest extends AbstractTest
     }
 
     @Test
-    public void testMutate()
+    void testMutate()
     {
         final ByteArrayKey key = new ByteArrayKey(new byte[]{6});
         final byte[] valueBytes = "ThisIsTheDataToStoreSoLetsMakeItABitLonger".getBytes(StandardCharsets.UTF_8);
@@ -142,7 +143,7 @@ public abstract class MysqlClientTest extends AbstractTest
 
         db.put(key, valueBytes);
 
-        db.mutate(key, (Function<byte[], byte[]>) input -> valueBytesUpdated);
+        db.mutate(key, input -> valueBytesUpdated);
 
         final CasHolder<ByteArrayKey, byte[], Long> res = db.getCas(key);
         assertThat(res.getCasValue()).isEqualTo(1);

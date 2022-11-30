@@ -26,7 +26,6 @@ import java.util.Objects;
 
 public class CasHolder<K, V, C extends Comparable<C>> implements Serializable, Comparable<CasHolder<K, V, C>>
 {
-    private static final long serialVersionUID = 8391662893296912918L;
     private final K key;
     private C casValue;
     private V value;
@@ -74,14 +73,19 @@ public class CasHolder<K, V, C extends Comparable<C>> implements Serializable, C
     @Override
     public boolean equals(Object obj)
     {
-        if (obj instanceof CasHolder)
+        if (obj == this)
         {
-            @SuppressWarnings("unchecked") final CasHolder<K, V, C> b = (CasHolder<K, V, C>) obj;
-            return equals(key, b.key)
-                    && equals(value, b.value)
-                    && equals(casValue, b.casValue);
+            return true;
         }
-        return false;
+        else if (obj == null || obj.getClass() != getClass())
+        {
+            return false;
+        }
+
+        @SuppressWarnings("unchecked") final CasHolder<K, V, C> b = (CasHolder<K, V, C>) obj;
+        return equals(key, b.key)
+                && equals(value, b.value)
+                && equals(casValue, b.casValue);
     }
 
     @Override

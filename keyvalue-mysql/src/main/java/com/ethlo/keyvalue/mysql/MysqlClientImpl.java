@@ -21,37 +21,43 @@ package com.ethlo.keyvalue.mysql;
  */
 
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
-import javax.annotation.Nonnull;
 import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.support.DataAccessUtils;
-import org.springframework.jdbc.core.*;
+import org.springframework.data.util.CloseableIterator;
+import org.springframework.jdbc.core.BatchPreparedStatementSetter;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.PreparedStatementCreator;
+import org.springframework.jdbc.core.PreparedStatementCreatorFactory;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.lang.NonNull;
 import org.springframework.util.Assert;
 
 import com.ethlo.keyvalue.BatchWriteWrapper;
-import com.ethlo.keyvalue.SeekableIterator;
+import com.ethlo.keyvalue.CloseableAbstractIterator;
 import com.ethlo.keyvalue.cas.CasHolder;
 import com.ethlo.keyvalue.compression.DataCompressor;
 import com.ethlo.keyvalue.keys.ByteArrayKey;
 import com.ethlo.keyvalue.keys.encoders.KeyEncoder;
-import com.google.common.collect.AbstractIterator;
 
 /**
  * Works by using standard SQL for handling data operations instead of the MySql-MemCached interface
@@ -71,12 +77,9 @@ public class MysqlClientImpl implements MysqlClient
     private final String getCasSqlFirst;
     private final String deleteSql;
     private final String insertOnDuplicateUpdateSql;
-    private final String replaceInto;
 
     private final RowMapper<byte[]> rowMapper;
     private final RowMapper<CasHolder<ByteArrayKey, byte[], Long>> casRowMapper;
-
-    private final boolean useReplaceInto;
 
     private final PreparedStatementCreatorFactory getDataCasPscFactory;
     private final PreparedStatementCreatorFactory clearPscFactory;
@@ -86,14 +89,8 @@ public class MysqlClientImpl implements MysqlClient
 
     public MysqlClientImpl(String tableName, DataSource dataSource, KeyEncoder keyEncoder, DataCompressor dataCompressor)
     {
-        this(tableName, dataSource, keyEncoder, dataCompressor, false);
-    }
-
-    public MysqlClientImpl(String tableName, DataSource dataSource, KeyEncoder keyEncoder, DataCompressor dataCompressor, boolean useReplaceInto)
-    {
         this.keyEncoder = keyEncoder;
         this.dataCompressor = dataCompressor;
-        this.useReplaceInto = useReplaceInto;
 
         Assert.hasLength(tableName, "tableName cannot be null");
         Assert.notNull(dataSource, "dataSource cannot be null");
@@ -106,7 +103,6 @@ public class MysqlClientImpl implements MysqlClient
         String insertCasSql = "INSERT INTO " + tableName + " (mkey, mvalue, cas_column) VALUES(?, ?, ?)";
         String updateCasSql = "UPDATE " + tableName + " SET mvalue = ?, cas_column = cas_column + 1 WHERE mkey = ? AND cas_column = ?";
         this.insertOnDuplicateUpdateSql = "INSERT INTO " + tableName + " (mkey, mvalue, cas_column) VALUES(?, ?, ?) ON DUPLICATE KEY UPDATE mvalue=?, cas_column=cas_column+1";
-        this.replaceInto = "REPLACE INTO " + tableName + " (mkey, mvalue, cas_column) VALUES(?, ?, COALESCE(0, cas_column + 1))";
         this.deleteSql = "DELETE FROM " + tableName + " WHERE mkey = ?";
         String clearSql = "DELETE FROM " + tableName;
 
@@ -154,14 +150,7 @@ public class MysqlClientImpl implements MysqlClient
     @Override
     public void putAll(final Map<ByteArrayKey, byte[]> values)
     {
-        if (!useReplaceInto)
-        {
-            insertOnDuplicateKeyUpdate(values);
-        }
-        else
-        {
-            replaceInto(values);
-        }
+        insertOnDuplicateKeyUpdate(values);
     }
 
     private void insertOnDuplicateKeyUpdate(final Map<ByteArrayKey, byte[]> values)
@@ -169,7 +158,7 @@ public class MysqlClientImpl implements MysqlClient
         final List<ByteArrayKey> keys = new ArrayList<>(values.keySet());
         int[] updateCounts = tpl.batchUpdate(insertOnDuplicateUpdateSql, new BatchPreparedStatementSetter()
         {
-            public void setValues(@Nonnull PreparedStatement ps, int i) throws SQLException
+            public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException
             {
                 final ByteArrayKey key = keys.get(i);
                 final byte[] value = values.get(key);
@@ -178,29 +167,6 @@ public class MysqlClientImpl implements MysqlClient
                 ps.setBytes(2, compressedValue);
                 ps.setLong(3, 0L);
                 ps.setBytes(4, compressedValue);
-            }
-
-            public int getBatchSize()
-            {
-                return values.size();
-            }
-        });
-
-        logger.debug("Updated {} entries", updateCounts.length);
-    }
-
-    private void replaceInto(final Map<ByteArrayKey, byte[]> values)
-    {
-        final List<ByteArrayKey> keys = new ArrayList<>(values.keySet());
-        int[] updateCounts = tpl.batchUpdate(replaceInto, new BatchPreparedStatementSetter()
-        {
-            public void setValues(@Nonnull PreparedStatement ps, int i) throws SQLException
-            {
-                final ByteArrayKey key = keys.get(i);
-                final byte[] value = values.get(key);
-                final byte[] compressedValue = dataCompressor.compress(value);
-                ps.setString(1, keyEncoder.toString(key.getByteArray()));
-                ps.setBytes(2, compressedValue);
             }
 
             public int getBatchSize()
@@ -227,7 +193,7 @@ public class MysqlClientImpl implements MysqlClient
     @Override
     public void close()
     {
-
+        // Nothing to close
     }
 
     @Override
@@ -289,7 +255,7 @@ public class MysqlClientImpl implements MysqlClient
     }
 
     @Override
-    public void mutate(ByteArrayKey key, Function<byte[], byte[]> mutator)
+    public void mutate(ByteArrayKey key, UnaryOperator<byte[]> mutator)
     {
         final CasHolder<ByteArrayKey, byte[], Long> cas = this.getCas(key);
         final byte[] result = mutator.apply(cas != null ? Arrays.copyOf(cas.getValue(), cas.getValue().length) : null);
@@ -305,176 +271,89 @@ public class MysqlClientImpl implements MysqlClient
     }
 
     @Override
-    public SeekableIterator<ByteArrayKey, byte[]> iterator()
+    public CloseableIterator<Map.Entry<ByteArrayKey, byte[]>> iterator()
     {
-        return new JdbcSeekableIterator();
+        final PreparedStatementCreator psc = con ->
+                con.prepareStatement(getCasSqlFirst, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
+        return getCloseableAbstractIterator(psc);
+    }
+
+    @Override
+    public CloseableIterator<Map.Entry<ByteArrayKey, byte[]>> iteratorFromPrefix(ByteArrayKey key)
+    {
+        final PreparedStatementCreator psc = con ->
+        {
+            final PreparedStatement ps = con.prepareStatement(getCasSqlPrefix, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
+            final String strKey = keyEncoder.toString(key.getByteArray());
+            ps.setString(1, strKey + "%");
+            return ps;
+        };
+
+        return getCloseableAbstractIterator(psc);
+    }
+
+    private CloseableAbstractIterator<Map.Entry<ByteArrayKey, byte[]>> getCloseableAbstractIterator(PreparedStatementCreator psc)
+    {
+        Connection connection;
+        PreparedStatement ps;
+        ResultSet rs;
+
+        try
+        {
+            connection = Objects.requireNonNull(tpl.getDataSource()).getConnection();
+            ps = psc.createPreparedStatement(connection);
+            rs = ps.executeQuery();
+        }
+        catch (SQLException exc)
+        {
+            throw new DataAccessResourceFailureException(exc.getMessage(), exc);
+        }
+        return new CloseableAbstractIterator<>()
+        {
+            @Override
+            public void close()
+            {
+                tryClose(rs);
+                tryClose(ps);
+                tryClose(connection);
+            }
+
+            private void tryClose(AutoCloseable closeable)
+            {
+                try
+                {
+                    closeable.close();
+                }
+                catch (Exception e)
+                {
+                    // Nothing more we can do
+                }
+            }
+
+            @Override
+            protected Map.Entry<ByteArrayKey, byte[]> computeNext()
+            {
+                try
+                {
+                    if (rs.next())
+                    {
+                        final CasHolder<ByteArrayKey, byte[], Long> res = casRowMapper.mapRow(rs, rs.getRow());
+                        return new AbstractMap.SimpleEntry<>(Objects.requireNonNull(res).getKey(), res.getValue());
+                    }
+                    close();
+                    return endOfData();
+                }
+                catch (SQLException exc)
+                {
+                    throw new DataAccessResourceFailureException(exc.getMessage(), exc);
+                }
+            }
+        };
     }
 
     @Override
     public void putAll(final BatchWriteWrapper<ByteArrayKey, byte[]> batch)
     {
         this.putAll(batch.data());
-    }
-
-    private class JdbcSeekableIterator extends AbstractIterator<Entry<ByteArrayKey, byte[]>> implements SeekableIterator<ByteArrayKey, byte[]>
-    {
-        private ResultSet rs = null;
-        private Connection connection;
-        private PreparedStatement ps;
-
-        @Override
-        protected Entry<ByteArrayKey, byte[]> computeNext()
-        {
-            try
-            {
-                if (!rs.isAfterLast())
-                {
-                    final CasHolder<ByteArrayKey, byte[], Long> res = casRowMapper.mapRow(rs, rs.getRow());
-                    rs.next();
-                    return new AbstractMap.SimpleEntry<>(Objects.requireNonNull(res).getKey(), res.getValue());
-                }
-                return endOfData();
-            }
-            catch (SQLException exc)
-            {
-                throw new DataAccessResourceFailureException(exc.getMessage(), exc);
-            }
-        }
-
-        @Override
-        public void close()
-        {
-            if (rs != null)
-            {
-                try
-                {
-                    rs.close();
-                    rs = null;
-                }
-                catch (SQLException exc)
-                {
-                    throw new DataAccessResourceFailureException(exc.getMessage(), exc);
-                }
-            }
-
-            if (ps != null)
-            {
-                try
-                {
-                    ps.close();
-                    ps = null;
-                }
-                catch (SQLException exc)
-                {
-                    throw new DataAccessResourceFailureException(exc.getMessage(), exc);
-                }
-            }
-
-            if (connection != null)
-            {
-                try
-                {
-                    connection.close();
-                    connection = null;
-                }
-                catch (SQLException exc)
-                {
-                    throw new DataAccessResourceFailureException(exc.getMessage(), exc);
-                }
-            }
-        }
-
-        @Override
-        public boolean hasPrevious()
-        {
-            try
-            {
-                final boolean hasPrevious = rs.previous();
-                if (hasPrevious)
-                {
-                    rs.next();
-                }
-                return hasPrevious;
-            }
-            catch (SQLException exc)
-            {
-                throw new DataAccessResourceFailureException(exc.getMessage(), exc);
-            }
-        }
-
-        @Override
-        public Entry<ByteArrayKey, byte[]> previous()
-        {
-            try
-            {
-                if (rs.previous())
-                {
-                    final CasHolder<ByteArrayKey, byte[], Long> res = casRowMapper.mapRow(rs, rs.getRow());
-                    return new AbstractMap.SimpleEntry<>(Objects.requireNonNull(res).getKey(), res.getValue());
-                }
-            }
-            catch (SQLException exc)
-            {
-                throw new DataAccessResourceFailureException(exc.getMessage(), exc);
-            }
-            throw new EmptyResultDataAccessException("No previous result", 1);
-        }
-
-        @Override
-        public boolean seekTo(ByteArrayKey key)
-        {
-            final PreparedStatementCreator getCasPsc = con ->
-            {
-                final PreparedStatement ps = con.prepareStatement(getCasSqlPrefix, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
-                final String strKey = keyEncoder.toString(key.getByteArray());
-                ps.setString(1, strKey + "%");
-                return ps;
-            };
-
-            try
-            {
-                close();
-                this.connection = Objects.requireNonNull(tpl.getDataSource()).getConnection();
-                this.ps = getCasPsc.createPreparedStatement(connection);
-                this.rs = ps.executeQuery();
-                return this.rs.first();
-            }
-            catch (SQLException exc)
-            {
-                throw new DataAccessResourceFailureException(exc.getMessage(), exc);
-            }
-        }
-
-        @Override
-        public boolean seekToFirst()
-        {
-            final PreparedStatementCreator getCasPsc = connection -> connection.prepareStatement(getCasSqlFirst, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
-
-            try
-            {
-                close();
-                this.connection = Objects.requireNonNull(tpl.getDataSource()).getConnection();
-                this.ps = getCasPsc.createPreparedStatement(connection);
-                this.rs = ps.executeQuery();
-                return rs.first();
-            }
-            catch (SQLException exc)
-            {
-                throw new DataAccessResourceFailureException(exc.getMessage(), exc);
-            }
-        }
-
-        @Override
-        public boolean seekToLast()
-        {
-            try
-            {
-                return rs.last();
-            }
-            catch (SQLException exc)
-            {
-                throw new DataAccessResourceFailureException(exc.getMessage(), exc);
-            }
-        }
     }
 }

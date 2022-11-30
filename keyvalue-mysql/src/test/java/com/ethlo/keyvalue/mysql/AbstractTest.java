@@ -22,34 +22,31 @@ package com.ethlo.keyvalue.mysql;
 
 import javax.sql.DataSource;
 
-import org.junit.Before;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import com.ethlo.keyvalue.compression.DataCompressor;
 import com.ethlo.keyvalue.compression.NopDataCompressor;
 import com.ethlo.keyvalue.keys.encoders.HexKeyEncoder;
 import com.ethlo.keyvalue.keys.encoders.KeyEncoder;
 
-@RunWith(SpringRunner.class)
+@ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = TestCfg.class)
 public abstract class AbstractTest
 {
-    @Autowired
-    private DataSource dataSource;
-
     protected final KeyEncoder keyEncoder = new HexKeyEncoder();
     protected final DataCompressor dataCompressor = new NopDataCompressor();
     protected MysqlClient db;
+    @Autowired
+    private DataSource dataSource;
 
-    protected abstract boolean useReplaceInto();
-
-    @Before
+    @BeforeEach
     public void setup()
     {
-        final MysqlClientManagerImpl<MysqlClient> clientManager = new MysqlClientManagerImpl<>(MysqlClient.class, dataSource, useReplaceInto());
+        final MysqlClientManagerImpl<MysqlClient> clientManager = new MysqlClientManagerImpl<>(dataSource);
         this.db = clientManager.getDb("_kvtest", true, keyEncoder, dataCompressor);
         this.db.clear();
     }

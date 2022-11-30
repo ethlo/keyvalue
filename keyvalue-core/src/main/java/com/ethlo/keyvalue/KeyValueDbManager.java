@@ -32,20 +32,10 @@ import org.slf4j.LoggerFactory;
 import com.ethlo.keyvalue.compression.DataCompressor;
 import com.ethlo.keyvalue.keys.encoders.KeyEncoder;
 
-/**
- * @author mha
- */
 public abstract class KeyValueDbManager<T extends BaseKeyValueDb> implements Closeable
 {
     private static final Logger logger = LoggerFactory.getLogger(KeyValueDbManager.class);
-
     private final Map<String, T> dbs = new HashMap<>();
-    protected final Class<T> type;
-
-    protected KeyValueDbManager(final Class<T> type)
-    {
-        this.type = type;
-    }
 
     protected abstract Object doCreateDb(String dbName, boolean create, KeyEncoder keyEncoder, DataCompressor dataCompressor);
 
@@ -55,15 +45,10 @@ public abstract class KeyValueDbManager<T extends BaseKeyValueDb> implements Clo
         if (db == null)
         {
             final Object rawDb = doCreateDb(dbName, create, keyEncoder, dataCompressor);
-            db = createDb(rawDb, type);
+            db = (T) rawDb;
             this.dbs.put(dbName, db);
         }
         return db;
-    }
-
-    private T createDb(final Object db, final Class<T> type)
-    {
-        return KeyValueProxy.proxy(db, type);
     }
 
     private T getOpenDb(String name)

@@ -29,26 +29,15 @@ import com.ethlo.keyvalue.KeyValueDbManager;
 import com.ethlo.keyvalue.compression.DataCompressor;
 import com.ethlo.keyvalue.keys.encoders.KeyEncoder;
 
-/**
- * @author Morten Haraldsen
- */
 public class MysqlClientManagerImpl<T extends BaseKeyValueDb> extends KeyValueDbManager<T>
 {
     private final MysqlUtil mysqlUtil;
     private final DataSource dataSource;
-    private final boolean useReplaceInto;
 
-    public MysqlClientManagerImpl(Class<T> type, DataSource dataSource)
+    public MysqlClientManagerImpl(DataSource dataSource)
     {
-        this(type, dataSource, false);
-    }
-
-    public MysqlClientManagerImpl(Class<T> type, DataSource dataSource, boolean useReplaceInto)
-    {
-        super(type);
         this.dataSource = dataSource;
-        this.mysqlUtil = new MysqlUtil(null, dataSource);
-        this.useReplaceInto = useReplaceInto;
+        this.mysqlUtil = new MysqlUtil(dataSource);
     }
 
     @Override
@@ -62,6 +51,6 @@ public class MysqlClientManagerImpl<T extends BaseKeyValueDb> extends KeyValueDb
         {
             this.mysqlUtil.createTable(tableName);
         }
-        return new MysqlClientImpl(tableName, dataSource, keyEncoder, dataCompressor, useReplaceInto);
+        return new MysqlClientImpl(tableName, dataSource, keyEncoder, dataCompressor);
     }
 }

@@ -30,29 +30,20 @@ import java.util.TreeMap;
 
 import javax.sql.DataSource;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.util.Assert;
 
-/**
- * @author mha
- */
 public class MysqlUtil
 {
-    public static final String INNODB_MEMCACHE_DB_NAME = "innodb_memcache";
     public static final int TABLE_NAME_MAX_LENGTH = 64;
 
-    private static final Logger logger = LoggerFactory.getLogger(MysqlUtil.class);
     private final DataSource dataSource;
     private final NamedParameterJdbcTemplate tpl;
-    private final String schemaName;
 
-    public MysqlUtil(String schemaName, DataSource dataSource)
+    public MysqlUtil(DataSource dataSource)
     {
         this.dataSource = dataSource;
         this.tpl = new NamedParameterJdbcTemplate(dataSource);
-        this.schemaName = schemaName;
     }
 
     public void setup(String dbName, boolean allowCreate)
@@ -85,8 +76,8 @@ public class MysqlUtil
     {
         try (final Connection c = this.dataSource.getConnection())
         {
-            DatabaseMetaData md = c.getMetaData();
-            ResultSet rs = md.getTables(null, null, "%", null);
+            final DatabaseMetaData md = c.getMetaData();
+            final ResultSet rs = md.getTables(null, null, "%", null);
             while (rs.next())
             {
                 final String tableName = rs.getString(3);
@@ -99,7 +90,7 @@ public class MysqlUtil
         }
         catch (SQLException e)
         {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(new IOException(e));
         }
     }
 

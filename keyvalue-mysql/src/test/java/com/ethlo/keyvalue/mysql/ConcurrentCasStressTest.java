@@ -30,17 +30,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
 
+import com.ethlo.binary.UnsignedUtil;
 import com.ethlo.keyvalue.keys.ByteArrayKey;
-import com.google.common.base.Function;
-import com.google.common.primitives.Ints;
 
-public class ConcurrentCasStressTest extends AbstractTest
+class ConcurrentCasStressTest extends AbstractTest
 {
     @Test
-    public void casStressTest() throws Exception
+    void casStressTest() throws Exception
     {
         final int threadCount = 100;
         final int iterations = 200;
@@ -52,26 +51,25 @@ public class ConcurrentCasStressTest extends AbstractTest
             {
                 for (int j = 0; j < iterations; j++)
                 {
-                    final ByteArrayKey key = new ByteArrayKey(Ints.toByteArray(j));
+                    final ByteArrayKey key = new ByteArrayKey(UnsignedUtil.encodeUnsignedInt(j));
 
-                    boolean failing = true;
-                    while (failing)
+                    boolean success = false;
+                    while (!success)
                     {
                         try
                         {
-                            db.mutate(key, (Function<byte[], byte[]>) input ->
+                            db.mutate(key, input ->
                             {
-                                final int curCount = input != null ? Ints.fromByteArray(input) : 0;
+                                final long curCount = input != null ? UnsignedUtil.decodeUnsignedInt(input) : 0;
 
                                 // Increment by 1
-                                return Ints.toByteArray(curCount + 1);
+                                return UnsignedUtil.encodeUnsignedInt(curCount + 1);
                             });
-                            failing = false;
+                            success = true;
                         }
                         catch (OptimisticLockingFailureException exc)
                         {
                             failed.incrementAndGet();
-                            failing = true;
                         }
                     }
                 }
@@ -92,40 +90,40 @@ public class ConcurrentCasStressTest extends AbstractTest
         // Check data is correct
         for (int i = 0; i < iterations; i++)
         {
-            final ByteArrayKey key = new ByteArrayKey(Ints.toByteArray(i));
-            final int count = Ints.fromByteArray(db.get(key));
+            final ByteArrayKey key = new ByteArrayKey(UnsignedUtil.encodeUnsignedInt(i));
+            final long count = UnsignedUtil.decodeUnsignedInt(db.get(key));
             assertThat(count).isEqualTo(threadCount);
         }
         System.out.println("Failed attempts " + failed.get());
     }
 
     @Test
-    public void casStressTestSameKey() throws Exception
+    void casStressTestSameKey() throws Exception
     {
         final int threadCount = 25;
         final int iterations = 100;
         final List<Callable<Void>> threadArr = new ArrayList<>(threadCount);
-        final ByteArrayKey key = new ByteArrayKey(Ints.toByteArray((int) (Math.random() * Integer.MAX_VALUE)));
+        final ByteArrayKey key = new ByteArrayKey(UnsignedUtil.encodeUnsignedInt((int) (Math.random() * Integer.MAX_VALUE)));
         final AtomicInteger failed = new AtomicInteger();
         for (int threadIdx = 0; threadIdx < threadCount; threadIdx++)
         {
             threadArr.add(() -> {
                 for (int j = 0; j < iterations; j++)
                 {
-                    boolean failing = true;
-                    while (failing)
+                    boolean success = false;
+                    while (!success)
                     {
                         try
                         {
-                            db.mutate(key, (Function<byte[], byte[]>) input ->
+                            db.mutate(key, input ->
                             {
-                                final int curCount = input != null ? Ints.fromByteArray(input) : 0;
+                                final long curCount = input != null ? UnsignedUtil.decodeUnsignedInt(input) : 0;
 
                                 // Increment by 1
-                                return Ints.toByteArray(curCount + 1);
+                                return UnsignedUtil.encodeUnsignedInt(curCount + 1);
                             });
 
-                            failing = false;
+                            success = true;
                         }
                         catch (OptimisticLockingFailureException exc)
                         {
@@ -147,14 +145,8 @@ public class ConcurrentCasStressTest extends AbstractTest
             res.get();
         }
 
-        final int count = Ints.fromByteArray(db.get(key));
+        final long count = UnsignedUtil.decodeUnsignedInt(db.get(key));
         System.out.println(count + " (failed attempts " + failed.get() + ")");
         assertThat(count).isEqualTo(threadCount * iterations);
-    }
-
-    @Override
-    protected boolean useReplaceInto()
-    {
-        return false;
     }
 }
