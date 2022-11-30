@@ -27,7 +27,7 @@ import com.ethlo.keyvalue.keys.encoders.KeyEncoder;
 public class HashmapKeyValueDbManager extends KeyValueDbManager<HashmapKeyValueDb>
 {
     @Override
-    protected Object doCreateDb(final String dbName, final boolean create, final KeyEncoder keyEncoder, final DataCompressor dataCompressor)
+    protected HashmapKeyValueDb doCreateDb(final String dbName, final boolean create, final KeyEncoder keyEncoder, final DataCompressor dataCompressor)
     {
         return new HashmapKeyValueDbImpl();
     }

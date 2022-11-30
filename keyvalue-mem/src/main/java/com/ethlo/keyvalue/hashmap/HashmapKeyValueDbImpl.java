@@ -20,10 +20,16 @@ package com.ethlo.keyvalue.hashmap;
  * #L%
  */
 
+import java.util.AbstractMap;
 import java.util.Iterator;
 import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.UnaryOperator;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.util.CloseableIterator;
 
 import com.ethlo.keyvalue.cas.CasHolder;
@@ -32,24 +38,24 @@ import com.ethlo.keyvalue.keys.encoders.HexKeyEncoder;
 
 public class HashmapKeyValueDbImpl implements HashmapKeyValueDb
 {
-    private final ConcurrentSkipListMap<ByteArrayKey, byte[]> data = new ConcurrentSkipListMap<>();
+    private final ConcurrentSkipListMap<ByteArrayKey, CasHolder<ByteArrayKey, byte[], Long>> data = new ConcurrentSkipListMap<>();
 
     @Override
     public byte[] get(ByteArrayKey key)
     {
-        return data.get(key);
+        return Optional.ofNullable(data.get(key)).map(CasHolder::getValue).orElse(null);
     }
 
     @Override
     public void put(ByteArrayKey key, byte[] value)
     {
-        this.data.put(key, value);
+        this.data.put(key, new CasHolder<>(0L, key, value));
     }
 
     @Override
     public void clear()
     {
-        this.data.clear();
+        data.clear();
     }
 
     @Override
@@ -61,20 +67,27 @@ public class HashmapKeyValueDbImpl implements HashmapKeyValueDb
     @Override
     public CasHolder<ByteArrayKey, byte[], Long> getCas(ByteArrayKey key)
     {
-        //FIXME: Faking it!
-        final byte[] value = this.get(key);
-        if (value != null)
-        {
-            return new CasHolder<>(0L, key, value);
-        }
-        return null;
+        return data.get(key);
     }
 
     @Override
     public void putCas(CasHolder<ByteArrayKey, byte[], Long> casHolder)
     {
-        //FIXME: Faking it!
-        this.put(casHolder.getKey(), casHolder.getValue());
+        this.data.compute(casHolder.getKey(), (k, v) ->
+        {
+            if (v == null)
+            {
+                return new CasHolder<>(0L, k, casHolder.getValue());
+            }
+            else
+            {
+                if (!Objects.equals(casHolder.getCasValue(), v.getCasValue()))
+                {
+                    throw new DataIntegrityViolationException("CAS");
+                }
+                return new CasHolder<>(v.getCasValue() + 1L, k, v.getValue());
+            }
+        });
     }
 
     @Override
@@ -86,9 +99,9 @@ public class HashmapKeyValueDbImpl implements HashmapKeyValueDb
     public long getTotalSize()
     {
         long total = 0;
-        for (byte[] e : data.values())
+        for (CasHolder<ByteArrayKey, byte[], Long> e : data.values())
         {
-            total += e.length;
+            total += e.getValue().length;
         }
         return total;
     }
@@ -107,7 +120,7 @@ public class HashmapKeyValueDbImpl implements HashmapKeyValueDb
 
     private CloseableIterator<Entry<ByteArrayKey, byte[]>> getCloseableIterator(ByteArrayKey keyPrefix)
     {
-        final Iterator<Entry<ByteArrayKey, byte[]>> iter = data.entrySet().iterator();
+        final Iterator<Entry<ByteArrayKey, CasHolder<ByteArrayKey, byte[], Long>>> iter = data.entrySet().iterator();
 
         if (keyPrefix != null)
         {
@@ -116,7 +129,7 @@ public class HashmapKeyValueDbImpl implements HashmapKeyValueDb
 
             while (iter.hasNext())
             {
-                final Entry<ByteArrayKey, byte[]> e = iter.next();
+                final Entry<ByteArrayKey, CasHolder<ByteArrayKey, byte[], Long>> e = iter.next();
                 final String hexKey = enc.toString(e.getKey().getByteArray());
                 if (hexKey.startsWith(targetKey))
                 {
@@ -136,7 +149,8 @@ public class HashmapKeyValueDbImpl implements HashmapKeyValueDb
             @Override
             public Entry<ByteArrayKey, byte[]> next()
             {
-                return iter.next();
+                final CasHolder<ByteArrayKey, byte[], Long> d = iter.next().getValue();
+                return new AbstractMap.SimpleEntry<>(d.getKey(), d.getValue());
             }
 
 
@@ -146,5 +160,29 @@ public class HashmapKeyValueDbImpl implements HashmapKeyValueDb
                 // Nothing to close
             }
         };
+    }
+
+    @Override
+    public byte[] mutate(final ByteArrayKey key, final UnaryOperator<byte[]> mutator)
+    {
+        final AtomicReference<byte[]> result = new AtomicReference<>();
+        data.compute(key, (k, v) ->
+        {
+            byte[] res;
+
+            if (v == null || v.getCasValue() == null)
+            {
+                res = mutator.apply(null);
+                result.set(res);
+                return new CasHolder<>(0L, key, res);
+            }
+            else
+            {
+                res = mutator.apply(v.getValue());
+                result.set(res);
+                return new CasHolder<>(v.getCasValue() + 1, key, res);
+            }
+        });
+        return result.get();
     }
 }

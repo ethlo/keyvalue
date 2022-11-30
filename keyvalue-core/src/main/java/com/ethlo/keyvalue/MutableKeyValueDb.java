@@ -39,5 +39,5 @@ public interface MutableKeyValueDb<K extends Key<K>, V> extends KeyValueDb<K, V>
      * @param key     The key for the data to mutate
      * @param mutator The function that modifies the content taking the existing data as input and returning the new modified data
      */
-    void mutate(K key, UnaryOperator<V> mutator);
+    V mutate(K key, UnaryOperator<V> mutator);
 }

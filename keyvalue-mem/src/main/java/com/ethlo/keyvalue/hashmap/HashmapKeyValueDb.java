@@ -21,9 +21,10 @@ package com.ethlo.keyvalue.hashmap;
  */
 
 import com.ethlo.keyvalue.IterableKeyValueDb;
+import com.ethlo.keyvalue.MutableKeyValueDb;
 import com.ethlo.keyvalue.cas.CasKeyValueDb;
 import com.ethlo.keyvalue.keys.ByteArrayKey;
 
-public interface HashmapKeyValueDb extends CasKeyValueDb<ByteArrayKey, byte[], Long>, IterableKeyValueDb<ByteArrayKey, byte[]>
+public interface HashmapKeyValueDb extends CasKeyValueDb<ByteArrayKey, byte[], Long>, IterableKeyValueDb<ByteArrayKey, byte[]>, MutableKeyValueDb<ByteArrayKey, byte[]>
 {
 }

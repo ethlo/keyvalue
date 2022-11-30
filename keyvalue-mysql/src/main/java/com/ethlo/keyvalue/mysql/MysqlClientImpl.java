@@ -255,7 +255,7 @@ public class MysqlClientImpl implements MysqlClient
     }
 
     @Override
-    public void mutate(ByteArrayKey key, UnaryOperator<byte[]> mutator)
+    public byte[] mutate(ByteArrayKey key, UnaryOperator<byte[]> mutator)
     {
         final CasHolder<ByteArrayKey, byte[], Long> cas = this.getCas(key);
         final byte[] result = mutator.apply(cas != null ? Arrays.copyOf(cas.getValue(), cas.getValue().length) : null);
@@ -268,6 +268,7 @@ public class MysqlClientImpl implements MysqlClient
         {
             this.putCas(new CasHolder<>(null, key, result));
         }
+        return result;
     }
 
     @Override
