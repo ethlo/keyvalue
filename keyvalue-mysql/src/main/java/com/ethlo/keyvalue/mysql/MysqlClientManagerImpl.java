@@ -24,12 +24,11 @@ import javax.sql.DataSource;
 
 import org.springframework.dao.DataAccessResourceFailureException;
 
-import com.ethlo.keyvalue.BaseKeyValueDb;
 import com.ethlo.keyvalue.KeyValueDbManager;
 import com.ethlo.keyvalue.compression.DataCompressor;
 import com.ethlo.keyvalue.keys.encoders.KeyEncoder;
 
-public class MysqlClientManagerImpl<T extends BaseKeyValueDb> extends KeyValueDbManager<T>
+public class MysqlClientManagerImpl extends KeyValueDbManager<MysqlClient>
 {
     private final MysqlUtil mysqlUtil;
     private final DataSource dataSource;

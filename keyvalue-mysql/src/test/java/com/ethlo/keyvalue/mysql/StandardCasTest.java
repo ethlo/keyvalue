@@ -20,34 +20,29 @@ package com.ethlo.keyvalue.mysql;
  * #L%
  */
 
-import javax.sql.DataSource;
-
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.transaction.annotation.Transactional;
 
-import com.ethlo.keyvalue.compression.DataCompressor;
+import com.ethlo.keyvalue.cas.CasKeyValueDb;
 import com.ethlo.keyvalue.compression.NopDataCompressor;
+import com.ethlo.keyvalue.keys.ByteArrayKey;
 import com.ethlo.keyvalue.keys.encoders.HexKeyEncoder;
-import com.ethlo.keyvalue.keys.encoders.KeyEncoder;
+import com.ethlo.keyvalue.test.CasKeyValueDbTest;
 
+@Transactional
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = TestCfg.class)
-public abstract class AbstractTest
+public class StandardCasTest extends CasKeyValueDbTest
 {
-    protected final KeyEncoder keyEncoder = new HexKeyEncoder();
-    protected final DataCompressor dataCompressor = new NopDataCompressor();
-    protected MysqlClient db;
     @Autowired
-    private DataSource dataSource;
+    private MysqlClientManagerImpl mysqlClientManager;
 
-    @BeforeEach
-    public void setup()
+    @Override
+    protected CasKeyValueDb<ByteArrayKey, byte[], Long> getCasKeyValueDb()
     {
-        final MysqlClientManagerImpl<MysqlClient> clientManager = new MysqlClientManagerImpl<>(dataSource);
-        this.db = clientManager.getDb("_kvtest", true, keyEncoder, dataCompressor);
-        this.db.clear();
+        return mysqlClientManager.getDb("_kvtest", true, new HexKeyEncoder(), new NopDataCompressor());
     }
 }

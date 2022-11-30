@@ -44,9 +44,9 @@ public abstract class KeyValueDbManager<T extends BaseKeyValueDb> implements Clo
         T db = this.getOpenDb(dbName);
         if (db == null)
         {
-            final Object rawDb = doCreateDb(dbName, create, keyEncoder, dataCompressor);
-            db = (T) rawDb;
-            this.dbs.put(dbName, db);
+            final T rawDb = (T) doCreateDb(dbName, create, keyEncoder, dataCompressor);
+            dbs.put(dbName, rawDb);
+            return rawDb;
         }
         return db;
     }

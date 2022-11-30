@@ -35,6 +35,6 @@ public class TestCfg
     @Bean
     KeyValueDbManager<MysqlClient> mysqlClientManager(DataSource dataSource)
     {
-        return new MysqlClientManagerImpl<>(dataSource);
+        return new MysqlClientManagerImpl(dataSource);
     }
 }

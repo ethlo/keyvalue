@@ -26,19 +26,19 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.ethlo.keyvalue.cas.CasKeyValueDb;
+import com.ethlo.keyvalue.KeyValueDb;
 import com.ethlo.keyvalue.keys.ByteArrayKey;
 
 public abstract class KeyValueDbTest
 {
-    protected CasKeyValueDb<ByteArrayKey, byte[], Long> db;
+    protected KeyValueDb<ByteArrayKey, byte[]> db;
 
-    protected abstract CasKeyValueDb<ByteArrayKey, byte[], Long> getCasDb();
+    protected abstract KeyValueDb<ByteArrayKey, byte[]> getDb();
 
     @BeforeEach
     void before()
     {
-        this.db = getCasDb();
+        this.db = getDb();
     }
 
     @AfterEach

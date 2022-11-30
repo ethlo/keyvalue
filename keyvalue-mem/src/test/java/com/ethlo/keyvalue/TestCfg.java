@@ -23,16 +23,15 @@ package com.ethlo.keyvalue;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import com.ethlo.keyvalue.cas.CasKeyValueDb;
+import com.ethlo.keyvalue.hashmap.HashmapKeyValueDb;
 import com.ethlo.keyvalue.hashmap.HashmapKeyValueDbManager;
-import com.ethlo.keyvalue.keys.ByteArrayKey;
 
 @Configuration
 public class TestCfg
 {
     @Bean
-    public KeyValueDbManager<CasKeyValueDb<ByteArrayKey, byte[], Long>> keyValueDbManager()
+    public KeyValueDbManager<HashmapKeyValueDb> keyValueDbManager()
     {
-        return new HashmapKeyValueDbManager<>();
+        return new HashmapKeyValueDbManager();
     }
 }

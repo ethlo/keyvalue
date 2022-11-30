@@ -2,9 +2,9 @@ package com.ethlo.keyvalue.mysql;
 
 /*-
  * #%L
- * Key/value MySQL implementation
+ * Key-Value - MySQL implementation
  * %%
- * Copyright (C) 2013 - 2020 Morten Haraldsen (ethlo)
+ * Copyright (C) 2013 - 2022 Morten Haraldsen (ethlo)
  * %%
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,15 +31,30 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.ethlo.binary.UnsignedUtil;
+import com.ethlo.keyvalue.MutableKeyValueDb;
+import com.ethlo.keyvalue.compression.NopDataCompressor;
 import com.ethlo.keyvalue.keys.ByteArrayKey;
+import com.ethlo.keyvalue.keys.encoders.HexKeyEncoder;
+import com.ethlo.keyvalue.test.MutateKeyValueDbTest;
 
-class ConcurrentCasStressTest extends AbstractTest
+@Transactional
+@ExtendWith(SpringExtension.class)
+@SpringBootTest(classes = TestCfg.class)
+class StandardMutateTest extends MutateKeyValueDbTest
 {
+    @Autowired
+    private MysqlClientManagerImpl mysqlClientManager;
+
     @Test
-    void casStressTest() throws Exception
+    void mutateStressTest() throws Exception
     {
         final int threadCount = 100;
         final int iterations = 200;
@@ -58,7 +73,7 @@ class ConcurrentCasStressTest extends AbstractTest
                     {
                         try
                         {
-                            db.mutate(key, input ->
+                            mutableKeyValueDb.mutate(key, input ->
                             {
                                 final long curCount = input != null ? UnsignedUtil.decodeUnsignedInt(input) : 0;
 
@@ -91,14 +106,14 @@ class ConcurrentCasStressTest extends AbstractTest
         for (int i = 0; i < iterations; i++)
         {
             final ByteArrayKey key = new ByteArrayKey(UnsignedUtil.encodeUnsignedInt(i));
-            final long count = UnsignedUtil.decodeUnsignedInt(db.get(key));
+            final long count = UnsignedUtil.decodeUnsignedInt(mutableKeyValueDb.get(key));
             assertThat(count).isEqualTo(threadCount);
         }
         System.out.println("Failed attempts " + failed.get());
     }
 
     @Test
-    void casStressTestSameKey() throws Exception
+    void mutateStressTestSameKey() throws Exception
     {
         final int threadCount = 25;
         final int iterations = 100;
@@ -115,7 +130,7 @@ class ConcurrentCasStressTest extends AbstractTest
                     {
                         try
                         {
-                            db.mutate(key, input ->
+                            mutableKeyValueDb.mutate(key, input ->
                             {
                                 final long curCount = input != null ? UnsignedUtil.decodeUnsignedInt(input) : 0;
 
@@ -145,8 +160,14 @@ class ConcurrentCasStressTest extends AbstractTest
             res.get();
         }
 
-        final long count = UnsignedUtil.decodeUnsignedInt(db.get(key));
+        final long count = UnsignedUtil.decodeUnsignedInt(mutableKeyValueDb.get(key));
         System.out.println(count + " (failed attempts " + failed.get() + ")");
         assertThat(count).isEqualTo(threadCount * iterations);
+    }
+
+    @Override
+    protected MutableKeyValueDb<ByteArrayKey, byte[]> getMutableKeyValueDb()
+    {
+        return mysqlClientManager.getDb("_kvtest", true, new HexKeyEncoder(), new NopDataCompressor());
     }
 }
