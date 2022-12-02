@@ -23,18 +23,20 @@ package com.ethlo.keyvalue.cas;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import com.ethlo.keyvalue.keys.ByteArrayKey;
+
 class CasHolderTest
 {
     @Test
     void testEquals()
     {
-        final byte[] keyA = new byte[]{1, 2, 3};
+        final ByteArrayKey keyA = ByteArrayKey.of(1, 2, 3);
         final byte[] valueA = new byte[]{5, 6, 7};
-        final CasHolder<byte[], byte[], Integer> a = new CasHolder<>(0, keyA, valueA);
+        final CasHolder<ByteArrayKey, byte[], Integer> a = new CasHolder<>(0, keyA, valueA);
 
-        final byte[] keyB = new byte[]{1, 2, 4};
+        final ByteArrayKey keyB = ByteArrayKey.of(1, 2, 4);
         final byte[] valueB = new byte[]{5, 6, 8};
-        final CasHolder<byte[], byte[], Integer> b = new CasHolder<>(0, keyB, valueB);
+        final CasHolder<ByteArrayKey, byte[], Integer> b = new CasHolder<>(0, keyB, valueB);
 
         Assertions.assertThat(a).isEqualTo(a).isEqualTo(new CasHolder<>(0, keyA, valueA));
         Assertions.assertThat(b).isEqualTo(b).isNotEqualTo(a);

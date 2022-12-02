@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ethlo.keyvalue.cas.CasHolder;
 import com.ethlo.keyvalue.cas.CasKeyValueDb;
+import com.ethlo.keyvalue.cas.TransparentCasKeyValueDb;
 import com.ethlo.keyvalue.keys.ByteArrayKey;
 
 public abstract class CasKeyValueDbTest
@@ -93,6 +94,31 @@ public abstract class CasKeyValueDbTest
     }
 
     @Test
+    void multiplePut()
+    {
+        final ByteArrayKey key = new ByteArrayKey(new byte[]{0, 1, 2, 3, 4, 5, 6, 7});
+        final byte[] valueBytes = "ThisIsTheData".getBytes(StandardCharsets.UTF_8);
+
+        casKeyValueDb.putCas(new CasHolder<>(null, key, valueBytes));
+        final CasHolder<ByteArrayKey, byte[], Long> res1 = casKeyValueDb.getCas(key);
+        assertThat(res1.key()).isEqualTo(key);
+        assertThat(res1.value()).isEqualTo(valueBytes);
+        assertThat(res1.version()).isEqualTo(1L);
+
+        casKeyValueDb.putCas(new CasHolder<>(1L, key, valueBytes));
+        final CasHolder<ByteArrayKey, byte[], Long> res2 = casKeyValueDb.getCas(key);
+        assertThat(res2.key()).isEqualTo(key);
+        assertThat(res2.value()).isEqualTo(valueBytes);
+        assertThat(res2.version()).isEqualTo(2L);
+
+        casKeyValueDb.putCas(new CasHolder<>(2L, key, valueBytes));
+        final CasHolder<ByteArrayKey, byte[], Long> res3 = casKeyValueDb.getCas(key);
+        assertThat(res3.key()).isEqualTo(key);
+        assertThat(res3.value()).isEqualTo(valueBytes);
+        assertThat(res3.version()).isEqualTo(3L);
+    }
+
+    @Test
     void putAll()
     {
         final ByteArrayKey keyBytes1 = new ByteArrayKey(new byte[]{0, 1, 2, 3, 4, 5, 6, 7});
@@ -115,19 +141,34 @@ public abstract class CasKeyValueDbTest
     void testCas()
     {
         final ByteArrayKey keyBytes = new ByteArrayKey(new byte[]{4, 5, 6, 7, 9, 9});
-        final byte[] valueBytes = "ThisIsTheDataToStoreSoLetsmakeItABitLonger".getBytes(StandardCharsets.UTF_8);
+        final byte[] valueBytes = "ThisIsTheDataToStoreSoLetsMakeItABitLonger".getBytes(StandardCharsets.UTF_8);
         casKeyValueDb.put(keyBytes, valueBytes);
 
         final CasHolder<ByteArrayKey, byte[], Long> res = casKeyValueDb.getCas(keyBytes);
-        assertThat(res.getKey()).isEqualTo(keyBytes);
-        assertThat(res.getCasValue()).isEqualTo(0);
-        assertThat(res.getValue()).isEqualTo(valueBytes);
+        assertThat(res.key()).isEqualTo(keyBytes);
+        assertThat(res.version()).isEqualTo(0);
+        assertThat(res.value()).isEqualTo(valueBytes);
 
         final byte[] valueBytesUpdated = "ThisIsTheDataToStoreSoLetsMakeItABitLongerAndEvenUpdated".getBytes(StandardCharsets.UTF_8);
-        res.setValue(valueBytesUpdated);
-        casKeyValueDb.putCas(res);
-        final CasHolder<ByteArrayKey, byte[], Long> cas = casKeyValueDb.getCas(res.getKey());
-        assertThat(cas.getValue()).isEqualTo(valueBytesUpdated);
-        assertThat(cas.getCasValue()).isEqualTo(1);
+        final CasHolder<ByteArrayKey, byte[], Long> updated = res.ofValue(valueBytesUpdated);
+        casKeyValueDb.putCas(updated);
+        final CasHolder<ByteArrayKey, byte[], Long> cas = casKeyValueDb.getCas(res.key());
+        assertThat(cas.value()).isEqualTo(valueBytesUpdated);
+        assertThat(cas.version()).isEqualTo(1);
+    }
+
+    @Test
+    void testTransparentCas()
+    {
+        final TransparentCasKeyValueDb<ByteArrayKey, byte[], Long> db = new TransparentCasKeyValueDb<>(casKeyValueDb);
+
+        final ByteArrayKey key = new ByteArrayKey(new byte[]{0, 1, 2, 3, 4, 5, 6, 7});
+        final byte[] valueBytes = "ThisIsTheData".getBytes(StandardCharsets.UTF_8);
+
+        db.put(key, valueBytes);
+        db.put(key, valueBytes);
+        db.put(key, valueBytes);
+
+        assertThat(casKeyValueDb.getCas(key).version()).isEqualTo(3);
     }
 }

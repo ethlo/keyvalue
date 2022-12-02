@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
 
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.util.CloseableIterator;
 
 import com.ethlo.keyvalue.cas.CasHolder;
@@ -43,13 +43,13 @@ public class HashmapKeyValueDbImpl implements HashmapKeyValueDb
     @Override
     public byte[] get(ByteArrayKey key)
     {
-        return Optional.ofNullable(data.get(key)).map(CasHolder::getValue).orElse(null);
+        return Optional.ofNullable(data.get(key)).map(CasHolder::value).orElse(null);
     }
 
     @Override
     public void put(ByteArrayKey key, byte[] value)
     {
-        this.data.put(key, new CasHolder<>(0L, key, value));
+        data.put(key, new CasHolder<>(0L, key, value));
     }
 
     @Override
@@ -73,19 +73,19 @@ public class HashmapKeyValueDbImpl implements HashmapKeyValueDb
     @Override
     public void putCas(CasHolder<ByteArrayKey, byte[], Long> casHolder)
     {
-        this.data.compute(casHolder.getKey(), (k, v) ->
+        data.compute(casHolder.key(), (k, existing) ->
         {
-            if (v == null)
+            if (existing == null)
             {
-                return new CasHolder<>(0L, k, casHolder.getValue());
+                return new CasHolder<>(1L, k, casHolder.value());
             }
             else
             {
-                if (!Objects.equals(casHolder.getCasValue(), v.getCasValue()))
+                if (!Objects.equals(casHolder.version(), existing.version()))
                 {
-                    throw new DataIntegrityViolationException("CAS");
+                    throw new OptimisticLockingFailureException("CAS value " + casHolder.version() + " is not matching expected " + existing.version() + " for key " + k);
                 }
-                return new CasHolder<>(v.getCasValue() + 1L, k, v.getValue());
+                return new CasHolder<>(existing.version() + 1L, k, casHolder.value());
             }
         });
     }
@@ -101,7 +101,7 @@ public class HashmapKeyValueDbImpl implements HashmapKeyValueDb
         long total = 0;
         for (CasHolder<ByteArrayKey, byte[], Long> e : data.values())
         {
-            total += e.getValue().length;
+            total += e.value().length;
         }
         return total;
     }
@@ -150,7 +150,7 @@ public class HashmapKeyValueDbImpl implements HashmapKeyValueDb
             public Entry<ByteArrayKey, byte[]> next()
             {
                 final CasHolder<ByteArrayKey, byte[], Long> d = iter.next().getValue();
-                return new AbstractMap.SimpleEntry<>(d.getKey(), d.getValue());
+                return new AbstractMap.SimpleEntry<>(d.key(), d.value());
             }
 
 
@@ -170,7 +170,7 @@ public class HashmapKeyValueDbImpl implements HashmapKeyValueDb
         {
             byte[] res;
 
-            if (v == null || v.getCasValue() == null)
+            if (v == null || v.version() == null)
             {
                 res = mutator.apply(null);
                 result.set(res);
@@ -178,9 +178,9 @@ public class HashmapKeyValueDbImpl implements HashmapKeyValueDb
             }
             else
             {
-                res = mutator.apply(v.getValue());
+                res = mutator.apply(v.value());
                 result.set(res);
-                return new CasHolder<>(v.getCasValue() + 1, key, res);
+                return new CasHolder<>(v.version() + 1, key, res);
             }
         });
         return result.get();

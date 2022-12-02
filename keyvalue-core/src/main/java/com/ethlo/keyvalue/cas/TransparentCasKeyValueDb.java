@@ -20,14 +20,13 @@ package com.ethlo.keyvalue.cas;
  * #L%
  */
 
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.ethlo.keyvalue.KeyValueDb;
 import com.ethlo.keyvalue.keys.Key;
 
 /**
@@ -35,150 +34,87 @@ import com.ethlo.keyvalue.keys.Key;
  *
  * @param <K> The key type
  * @param <V> The value type
- * @param <C> The cas value type
  * @author Morten Haraldsen
  */
-public class TransparentCasKeyValueDb<K extends Key<K>, V, C extends Comparable<C>> implements CasKeyValueDb<K, V, C>
+public class TransparentCasKeyValueDb<K extends Key<K>, V, C extends Comparable<C>> implements KeyValueDb<K, V>
 {
     private static final Logger logger = LoggerFactory.getLogger(TransparentCasKeyValueDb.class);
-    private final CasKeyValueDb<K, V, C> db;
+
+    private final CasKeyValueDb<K, V, C> delegate;
     private final ConcurrentHashMap<K, ValueHolder<C>> revisionHolder;
 
-    public TransparentCasKeyValueDb(CasKeyValueDb<K, V, C> casKeyValueDb)
+    public TransparentCasKeyValueDb(CasKeyValueDb<K, V, C> delegate)
     {
-        this.db = casKeyValueDb;
+        this.delegate = delegate;
         this.revisionHolder = new ConcurrentHashMap<>(16, 0.75f, 4);
     }
 
     @Override
     public V get(K key)
     {
-        final CasHolder<K, V, C> casHolder = db.getCas(key);
+        final CasHolder<K, V, C> casHolder = delegate.getCas(key);
         if (casHolder != null)
         {
-            final C currentCasValue = casHolder.getCasValue();
-            revisionHolder.put(key, ValueHolder.of(currentCasValue));
+            final C currentCasValue = casHolder.version();
+            revisionHolder.put(key, new ValueHolder<>(currentCasValue));
             logger.debug("get({}) with CAS value {}", key, currentCasValue);
-            return casHolder.getValue();
+            return casHolder.value();
         }
-        revisionHolder.put(key, ValueHolder.empty());
-        logger.debug("get({}) with empty result", key);
         return null;
     }
 
     @Override
     public void put(K key, V value)
     {
-        final ValueHolder<C> casValue = revisionHolder.get(key);
-        if (casValue != null)
+        try
         {
-            final C cas = casValue.orElse(null);
-            logger.debug("put({}) with CAS value {}", key, cas);
-            try
+            final ValueHolder<C> casValue = revisionHolder.get(key);
+            if (casValue != null)
             {
-                db.putCas(new CasHolder<>(cas, key, value));
-            } finally
-            {
-                this.revisionHolder.remove(key);
+                final C cas = casValue.value != null ? casValue.value : null;
+                logger.debug("put({}) with CAS value {}", key, cas);
+                delegate.putCas(new CasHolder<>(cas, key, value));
             }
+            else
+            {
+                final CasHolder<K, V, C> casFromDB = delegate.getCas(key);
+                if (casFromDB != null)
+                {
+                    delegate.putCas(new CasHolder<>(casFromDB.version(), key, value));
+                }
+                else
+                {
+                    delegate.putCas(new CasHolder<>(null, key, value));
+                }
+            }
+        } finally
+        {
+            this.revisionHolder.remove(key);
         }
     }
 
     @Override
     public void delete(K key)
     {
-        this.db.delete(key);
+        this.revisionHolder.remove(key);
+        this.delegate.delete(key);
     }
 
     @Override
     public void clear()
     {
-        this.db.clear();
+        this.revisionHolder.clear();
+        this.delegate.clear();
     }
 
     @Override
     public void close()
     {
-        this.db.close();
+        this.delegate.close();
     }
 
-    @Override
-    public CasHolder<K, V, C> getCas(K key)
+    private record ValueHolder<T>(T value)
     {
-        return db.getCas(key);
-    }
-
-    @Override
-    public void putCas(CasHolder<K, V, C> cas)
-    {
-        db.putCas(cas);
-    }
-
-    private static class ValueHolder<T>
-    {
-        private final T value;
-
-        private ValueHolder()
-        {
-            this.value = null;
-        }
-
-        private ValueHolder(T value)
-        {
-            this.value = Objects.requireNonNull(value);
-        }
-
-        public static <T> ValueHolder<T> empty()
-        {
-            return new ValueHolder<>();
-        }
-
-        public static <T> ValueHolder<T> of(T value)
-        {
-            return new ValueHolder<>(value);
-        }
-
-        public static <T> ValueHolder<T> ofNullable(T value)
-        {
-            return value == null ? empty() : of(value);
-        }
-
-        public T get()
-        {
-            if (this.value == null)
-            {
-                throw new NoSuchElementException("No value present");
-            }
-            else
-            {
-                return this.value;
-            }
-        }
-
-        public boolean isPresent()
-        {
-            return this.value != null;
-        }
-
-        public boolean isEmpty()
-        {
-            return this.value == null;
-        }
-
-        public void ifPresent(Consumer<? super T> action)
-        {
-            if (this.value != null)
-            {
-                action.accept(this.value);
-            }
-
-        }
-
-        public T orElse(T other)
-        {
-            return this.value != null ? this.value : other;
-        }
-
         public boolean equals(Object obj)
         {
             if (this == obj)
@@ -198,11 +134,6 @@ public class TransparentCasKeyValueDb<K extends Key<K>, V, C extends Comparable<
         public int hashCode()
         {
             return Objects.hashCode(this.value);
-        }
-
-        public String toString()
-        {
-            return this.value != null ? String.format("Optional[%s]", this.value) : "Optional.empty";
         }
     }
 }

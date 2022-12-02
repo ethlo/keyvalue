@@ -58,9 +58,9 @@ public abstract class MutateKeyValueDbTest
 
         mutableKeyValueDb.put(key, valueBytes);
 
-        mutableKeyValueDb.mutate(key, input -> valueBytesUpdated);
+        final byte[] updated = mutableKeyValueDb.mutate(key, input -> valueBytesUpdated);
+        assertThat(updated).isEqualTo(valueBytesUpdated);
 
-        final byte[] res = mutableKeyValueDb.get(key);
-        assertThat(valueBytesUpdated).isEqualTo(res);
+        assertThat(mutableKeyValueDb.get(key)).isEqualTo(valueBytesUpdated);
     }
 }

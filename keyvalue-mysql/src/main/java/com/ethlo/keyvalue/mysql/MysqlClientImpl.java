@@ -205,7 +205,7 @@ public class MysqlClientImpl implements MysqlClient
     @Override
     public void putCas(final CasHolder<ByteArrayKey, byte[], Long> cas)
     {
-        if (cas.getCasValue() != null)
+        if (cas.version() != null)
         {
             updateWithNonNullCasValue(cas);
         }
@@ -217,9 +217,9 @@ public class MysqlClientImpl implements MysqlClient
 
     private void insertNewDueToNullCasValue(final CasHolder<ByteArrayKey, byte[], Long> cas)
     {
-        final String strKey = keyEncoder.toString(cas.getKey().getByteArray());
-        final byte[] value = dataCompressor.compress(cas.getValue());
-        final PreparedStatementCreator psc = insertCasPscFactory.newPreparedStatementCreator(Arrays.asList(strKey, value, 0L));
+        final String strKey = keyEncoder.toString(cas.key().getByteArray());
+        final byte[] value = dataCompressor.compress(cas.value());
+        final PreparedStatementCreator psc = insertCasPscFactory.newPreparedStatementCreator(Arrays.asList(strKey, value, 1L));
 
         try
         {
@@ -227,20 +227,20 @@ public class MysqlClientImpl implements MysqlClient
         }
         catch (DuplicateKeyException exc)
         {
-            throw new OptimisticLockingFailureException("Cannot update " + cas.getKey(), exc);
+            throw new OptimisticLockingFailureException("Cannot update " + cas.key(), exc);
         }
     }
 
     private void updateWithNonNullCasValue(final CasHolder<ByteArrayKey, byte[], Long> cas)
     {
-        final String strKey = keyEncoder.toString(cas.getKey().getByteArray());
-        final long casValue = cas.getCasValue();
-        final byte[] value = dataCompressor.compress(cas.getValue());
+        final String strKey = keyEncoder.toString(cas.key().getByteArray());
+        final long casValue = cas.version();
+        final byte[] value = dataCompressor.compress(cas.value());
 
         final int rowsChanged = tpl.update(updateCasPscFactory.newPreparedStatementCreator(Arrays.asList(value, strKey, casValue)));
         if (rowsChanged == 0)
         {
-            throw new OptimisticLockingFailureException("Cannot update data for key " + cas.getKey() + " due to concurrent modification. Details: Attempted CAS value=" + cas.getCasValue());
+            throw new OptimisticLockingFailureException("Cannot update data for key " + cas.key() + " due to concurrent modification. Details: Attempted CAS value=" + cas.version());
         }
     }
 
@@ -258,11 +258,11 @@ public class MysqlClientImpl implements MysqlClient
     public byte[] mutate(ByteArrayKey key, UnaryOperator<byte[]> mutator)
     {
         final CasHolder<ByteArrayKey, byte[], Long> cas = this.getCas(key);
-        final byte[] result = mutator.apply(cas != null ? Arrays.copyOf(cas.getValue(), cas.getValue().length) : null);
+        final byte[] result = mutator.apply(cas != null ? cas.value() : null);
 
         if (cas != null)
         {
-            this.putCas(cas.setValue(result));
+            this.putCas(cas.ofValue(result));
         }
         else
         {
@@ -342,7 +342,7 @@ public class MysqlClientImpl implements MysqlClient
                     if (rs.next())
                     {
                         final CasHolder<ByteArrayKey, byte[], Long> res = casRowMapper.mapRow(rs, rs.getRow());
-                        return new AbstractMap.SimpleEntry<>(Objects.requireNonNull(res).getKey(), res.getValue());
+                        return new AbstractMap.SimpleEntry<>(Objects.requireNonNull(res).key(), res.value());
                     }
                     close();
                     return endOfData();

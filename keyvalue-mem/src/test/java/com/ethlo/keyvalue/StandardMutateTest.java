@@ -20,17 +20,15 @@ package com.ethlo.keyvalue;
  * #L%
  */
 
-import com.ethlo.keyvalue.compression.NopDataCompressor;
-import com.ethlo.keyvalue.keys.ByteArrayKey;
-
-import com.ethlo.keyvalue.keys.encoders.HexKeyEncoder;
-
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import com.ethlo.keyvalue.compression.NopDataCompressor;
 import com.ethlo.keyvalue.hashmap.HashmapKeyValueDbManager;
+import com.ethlo.keyvalue.keys.ByteArrayKey;
+import com.ethlo.keyvalue.keys.encoders.HexKeyEncoder;
 import com.ethlo.keyvalue.test.MutateKeyValueDbTest;
 
 @ExtendWith(SpringExtension.class)

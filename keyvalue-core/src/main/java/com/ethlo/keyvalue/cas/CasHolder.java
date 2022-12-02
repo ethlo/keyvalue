@@ -24,50 +24,13 @@ import java.io.Serializable;
 import java.lang.reflect.Array;
 import java.util.Objects;
 
-public class CasHolder<K, V, C extends Comparable<C>> implements Serializable, Comparable<CasHolder<K, V, C>>
+public record CasHolder<K extends Comparable<K>, V, C extends Comparable<C>>(C version, K key,
+                                                                             V value) implements Serializable, Comparable<CasHolder<K, V, C>>
 {
-    private final K key;
-    private C casValue;
-    private V value;
-
-    public CasHolder(C casValue, K key, V value)
-    {
-        this.casValue = casValue;
-        this.key = key;
-        this.value = value;
-    }
-
-    public C getCasValue()
-    {
-        return casValue;
-    }
-
-    public K getKey()
-    {
-        return key;
-    }
-
-    public V getValue()
-    {
-        return value;
-    }
-
-    public CasHolder<K, V, C> setValue(V value)
-    {
-        this.value = value;
-        return this;
-    }
-
     @Override
     public int hashCode()
     {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result
-                + ((casValue == null) ? 0 : casValue.hashCode());
-        result = prime * result + ((key == null) ? 0 : key.hashCode());
-        result = prime * result + ((value == null) ? 0 : value.hashCode());
-        return result;
+        return Objects.hash(key, value, version);
     }
 
     @Override
@@ -85,13 +48,39 @@ public class CasHolder<K, V, C extends Comparable<C>> implements Serializable, C
         @SuppressWarnings("unchecked") final CasHolder<K, V, C> b = (CasHolder<K, V, C>) obj;
         return equals(key, b.key)
                 && equals(value, b.value)
-                && equals(casValue, b.casValue);
+                && equals(version, b.version);
     }
 
     @Override
     public String toString()
     {
-        return "CasHolder [cas=" + casValue + ", key=" + key + ", value=" + value + "]";
+        return "CasHolder [cas=" + version + ", key=" + key + ", value=" + valueToString(value) + "]";
+    }
+
+    private String valueToString(V value)
+    {
+        if (value == null)
+        {
+            return "null";
+        }
+
+        if (value.getClass().isArray())
+        {
+            final int len = Array.getLength(value);
+            final StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < len; i++)
+            {
+                final Object entry = Array.get(value, i);
+                sb.append(entry);
+                if (i < len - 1)
+                {
+                    sb.append(",");
+                }
+            }
+            return sb.toString();
+        }
+
+        return value.toString();
     }
 
     private boolean equals(Object a, Object b)
@@ -141,22 +130,14 @@ public class CasHolder<K, V, C extends Comparable<C>> implements Serializable, C
         return true;
     }
 
-    public void setCas(C casValue)
-    {
-        this.casValue = casValue;
-    }
-
     @Override
     public int compareTo(final CasHolder<K, V, C> casHolder)
     {
-        if (Objects.equals(casValue, casHolder.getValue()))
-        {
-            return 0;
-        }
-        else if (casValue == null)
-        {
-            return -1;
-        }
-        return casValue.compareTo(casHolder.getCasValue());
+        return key.compareTo(casHolder.key);
+    }
+
+    public CasHolder<K, V, C> ofValue(V value)
+    {
+        return new CasHolder<>(version, key, value);
     }
 }

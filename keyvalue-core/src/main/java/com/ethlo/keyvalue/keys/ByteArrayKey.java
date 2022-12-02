@@ -45,6 +45,16 @@ public class ByteArrayKey extends Key<ByteArrayKey>
         this.keyData = keyData;
     }
 
+    public static ByteArrayKey of(int... bytes)
+    {
+        final byte[] result = new byte[bytes.length];
+        for (int i = 0; i < result.length; i++)
+        {
+            result[i] = (byte) bytes[i];
+        }
+        return new ByteArrayKey(result);
+    }
+
     @Override
     public boolean equals(Object b)
     {
@@ -93,41 +103,6 @@ public class ByteArrayKey extends Key<ByteArrayKey>
     @Override
     public int compareTo(ByteArrayKey b)
     {
-        if (this == b)
-        {
-            return 0;
-        }
-        else if (b == null)
-        {
-            return 1; // "a > b"
-        }
-
-        // now the item-by-item comparison - the loop runs as long as items in both arrays are equal
-        for (int i = 0; ; i++)
-        {
-            // shorter array whose items are all equal to the first items of a longer array is considered 'less than'
-            boolean pastA = (i == this.keyData.length);
-            boolean pastB = (i == b.keyData.length);
-            if (pastA && !pastB)
-            {
-                return -1; // "a < b"
-            }
-            else if (!pastA && pastB)
-            {
-                return 1; // "a > b"
-            }
-            else if (pastA)
-            {
-                return 0; // "a = b", same length, all items equal
-            }
-
-            final int ai = this.keyData[i];
-            final int bi = b.keyData[i];
-            final int compare = Integer.compare(ai, bi);
-            if (compare != 0)
-            {
-                return compare;
-            }
-        }
+        return Arrays.compare(keyData, b.keyData);
     }
 }
