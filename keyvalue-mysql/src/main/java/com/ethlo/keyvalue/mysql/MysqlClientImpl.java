@@ -303,6 +303,7 @@ public class MysqlClientImpl implements MysqlClient
         {
             connection = Objects.requireNonNull(tpl.getDataSource()).getConnection();
             ps = psc.createPreparedStatement(connection);
+            ps.setFetchSize(100);
             rs = ps.executeQuery();
         }
         catch (SQLException exc)
