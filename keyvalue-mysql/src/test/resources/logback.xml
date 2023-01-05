@@ -33,6 +33,8 @@
     <logger name="org.springframework.jdbc" level="INFO" />
     <logger name="org.springframework.jdbc.datasource.DataSourceUtils" level="INFO" />
 
+    <logger name="org.mariadb.jdbc.message.server.ErrorPacket" level="ERROR"/>
+
     <root level="INFO">
         <appender-ref ref="stdout"/>
     </root>

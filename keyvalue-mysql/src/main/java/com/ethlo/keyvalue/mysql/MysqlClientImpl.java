@@ -21,6 +21,8 @@ package com.ethlo.keyvalue.mysql;
  */
 
 
+import java.io.EOFException;
+import java.io.Serializable;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -33,6 +35,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
 
 import javax.sql.DataSource;
@@ -86,11 +90,14 @@ public class MysqlClientImpl implements MysqlClient
     private final PreparedStatementCreatorFactory insertCasPscFactory;
     private final PreparedStatementCreatorFactory updateCasPscFactory;
     private final PreparedStatementCreatorFactory getDataPscFactory;
+    private final int iteratorBatchSize;
 
-    public MysqlClientImpl(String tableName, DataSource dataSource, KeyEncoder keyEncoder, DataCompressor dataCompressor)
+    public MysqlClientImpl(final MysqlClientConfig config, final DataSource dataSource)
     {
-        this.keyEncoder = keyEncoder;
-        this.dataCompressor = dataCompressor;
+        this.keyEncoder = config.getKeyEncoder();
+        this.dataCompressor = config.getDataCompressor();
+        this.iteratorBatchSize = config.getBatchSize();
+        final String tableName = config.getName();
 
         Assert.hasLength(tableName, "tableName cannot be null");
         Assert.notNull(dataSource, "dataSource cannot be null");
@@ -98,8 +105,8 @@ public class MysqlClientImpl implements MysqlClient
 
         String getSql = "SELECT mvalue FROM " + tableName + " WHERE mkey = ?";
         String getCasSql = "SELECT mkey, mvalue, cas_column FROM " + tableName + " WHERE mkey = ?";
-        this.getCasSqlFirst = "SELECT mkey, mvalue, cas_column FROM " + tableName + " ORDER BY mkey";
-        this.getCasSqlPrefix = "SELECT mkey, mvalue, cas_column FROM " + tableName + " WHERE mkey LIKE ?";
+        this.getCasSqlFirst = "SELECT mkey, mvalue, cas_column FROM " + tableName + " WHERE mkey > ? ORDER BY mkey";
+        this.getCasSqlPrefix = "SELECT mkey, mvalue, cas_column FROM " + tableName + " WHERE mkey > ? AND mkey LIKE ? ORDER BY mkey";
         String insertCasSql = "INSERT INTO " + tableName + " (mkey, mvalue, cas_column) VALUES(?, ?, ?)";
         String updateCasSql = "UPDATE " + tableName + " SET mvalue = ?, cas_column = cas_column + 1 WHERE mkey = ? AND cas_column = ?";
         this.insertOnDuplicateUpdateSql = "INSERT INTO " + tableName + " (mkey, mvalue, cas_column) VALUES(?, ?, ?) ON DUPLICATE KEY UPDATE mvalue=?, cas_column=cas_column+1";
@@ -276,7 +283,7 @@ public class MysqlClientImpl implements MysqlClient
     {
         final PreparedStatementCreator psc = con ->
                 con.prepareStatement(getCasSqlFirst, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
-        return getCloseableAbstractIterator(psc);
+        return getCloseableAbstractIterator(psc, new AbstractMap.SimpleEntry<>(1, ""), iteratorBatchSize);
     }
 
     @Override
@@ -290,68 +297,80 @@ public class MysqlClientImpl implements MysqlClient
             return ps;
         };
 
-        return getCloseableAbstractIterator(psc);
+        return getCloseableAbstractIterator(psc, new AbstractMap.SimpleEntry<>(2, ""), iteratorBatchSize);
     }
 
-    private CloseableAbstractIterator<Map.Entry<ByteArrayKey, byte[]>> getCloseableAbstractIterator(PreparedStatementCreator psc)
+    private SqlCloseableAbstractIterator<Map.Entry<ByteArrayKey, byte[]>> createIterator(JdbcTemplate tpl, PreparedStatementCreator psc, Map.Entry<Integer, Serializable> startKey, int batchSize)
     {
-        Connection connection;
-        PreparedStatement ps;
-        ResultSet rs;
-
         try
         {
-            connection = Objects.requireNonNull(tpl.getDataSource()).getConnection();
-            ps = psc.createPreparedStatement(connection);
-            ps.setFetchSize(100);
-            rs = ps.executeQuery();
+            return new SqlCloseableAbstractIterator<>(Objects.requireNonNull(tpl.getDataSource()).getConnection(), psc, startKey, batchSize, (rs, num) ->
+            {
+                final CasHolder<ByteArrayKey, byte[], Long> res = casRowMapper.mapRow(rs, num);
+                return new AbstractMap.SimpleEntry<>(Objects.requireNonNull(res).key(), res.value());
+            });
         }
         catch (SQLException exc)
         {
             throw new DataAccessResourceFailureException(exc.getMessage(), exc);
         }
+    }
+
+    private CloseableAbstractIterator<Map.Entry<ByteArrayKey, byte[]>> getCloseableAbstractIterator(PreparedStatementCreator psc, final Map.Entry<Integer, Serializable> startKey, final int batchSize)
+    {
+        final AtomicReference<String> lastRetryKey = new AtomicReference<>();
+        final AtomicReference<SqlCloseableAbstractIterator<Map.Entry<ByteArrayKey, byte[]>>> iterator = new AtomicReference<>();
         return new CloseableAbstractIterator<>()
         {
             @Override
             public void close()
             {
-                tryClose(rs);
-                tryClose(ps);
-                tryClose(connection);
-            }
-
-            private void tryClose(AutoCloseable closeable)
-            {
-                if (closeable != null)
-                {
-                    try
-                    {
-                        closeable.close();
-                    }
-                    catch (Exception e)
-                    {
-                        // Nothing more we can do
-                    }
-                }
+                Optional.ofNullable(iterator.get()).ifPresent(SqlCloseableAbstractIterator::close);
             }
 
             @Override
             protected Map.Entry<ByteArrayKey, byte[]> computeNext()
             {
-                try
+                if (iterator.get() == null)
                 {
-                    if (rs.next())
+                    iterator.set(createIterator(tpl, psc, startKey, batchSize));
+                }
+                final SqlCloseableAbstractIterator<Map.Entry<ByteArrayKey, byte[]>> iter = iterator.get();
+                if (iter.hasNext())
+                {
+                    return iter.next();
+                }
+                else
+                {
+                    if (iter.exception != null)
                     {
-                        final CasHolder<ByteArrayKey, byte[], Long> res = casRowMapper.mapRow(rs, rs.getRow());
-                        return new AbstractMap.SimpleEntry<>(Objects.requireNonNull(res).key(), res.value());
+                        return processExceptionState(iter);
                     }
-                    close();
                     return endOfData();
                 }
-                catch (SQLException exc)
+            }
+
+            private Map.Entry<ByteArrayKey, byte[]> processExceptionState(SqlCloseableAbstractIterator<Map.Entry<ByteArrayKey, byte[]>> iter)
+            {
+                iter.close();
+
+                if (iter.exception.getCause() instanceof EOFException)
                 {
-                    throw new DataAccessResourceFailureException(exc.getMessage(), exc);
+                    // Connection was dropped, retry from last seen key
+
+                    // 1. First check if we have already failed at this position
+                    if (iter.lastSeenKey.equals(lastRetryKey.get()))
+                    {
+                        throw new DataAccessResourceFailureException("Unable to get past key " + lastRetryKey.get(), iter.exception);
+                    }
+
+                    // 2. Create new connection and try again
+                    logger.warn("Starting new iteration from after key '{}'", startKey.getValue());
+                    iterator.set(createIterator(tpl, psc, new AbstractMap.SimpleEntry<>(startKey.getKey(), iter.lastSeenKey), batchSize));
+                    lastRetryKey.set(iter.lastSeenKey);
+                    return iterator.get().computeNext();
                 }
+                throw new DataAccessResourceFailureException("An unexpected error occurred during iteration of data", iter.exception);
             }
         };
     }
@@ -360,5 +379,77 @@ public class MysqlClientImpl implements MysqlClient
     public void putAll(final BatchWriteWrapper<ByteArrayKey, byte[]> batch)
     {
         this.putAll(batch.data());
+    }
+
+    private static class SqlCloseableAbstractIterator<T> extends CloseableAbstractIterator<T>
+    {
+        private final Connection connection;
+        private final PreparedStatement ps;
+        private final ResultSet rs;
+        private final RowMapper<T> mapper;
+        private SQLException exception;
+        private String lastSeenKey;
+
+        public SqlCloseableAbstractIterator(final Connection connection, final PreparedStatementCreator psc, Map.Entry<Integer, Serializable> startKey, final int batchSize, final RowMapper<T> mapper)
+        {
+            this.mapper = mapper;
+            try
+            {
+                this.connection = Objects.requireNonNull(connection);
+                ps = psc.createPreparedStatement(connection);
+                ps.setFetchSize(batchSize);
+                ps.setObject(startKey.getKey(), startKey.getValue());
+                rs = ps.executeQuery();
+            }
+            catch (SQLException exc)
+            {
+                throw new DataAccessResourceFailureException(exc.getMessage(), exc);
+            }
+        }
+
+        @Override
+        public void close()
+        {
+            tryClose(rs);
+            tryClose(ps);
+            tryClose(connection);
+        }
+
+        private void tryClose(AutoCloseable closeable)
+        {
+            if (closeable != null)
+            {
+                try
+                {
+                    closeable.close();
+                }
+                catch (Exception e)
+                {
+                    // Nothing more we can do
+                }
+            }
+        }
+
+        @Override
+        protected T computeNext()
+        {
+            try
+            {
+                if (rs.next())
+                {
+                    lastSeenKey = rs.getString("mkey");
+                    return mapper.mapRow(rs, rs.getRow());
+                }
+                close();
+                return endOfData();
+            }
+            catch (SQLException exc)
+            {
+                logger.warn("SQL exception during fetching next row from result set: {}", exc.getMessage());
+                close();
+                this.exception = exc;
+                return endOfData();
+            }
+        }
     }
 }

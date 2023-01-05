@@ -29,23 +29,20 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.ethlo.keyvalue.compression.DataCompressor;
-import com.ethlo.keyvalue.keys.encoders.KeyEncoder;
-
 public abstract class KeyValueDbManager<T extends BaseKeyValueDb> implements Closeable
 {
     private static final Logger logger = LoggerFactory.getLogger(KeyValueDbManager.class);
     private final Map<String, T> dbs = new HashMap<>();
 
-    protected abstract Object doCreateDb(String dbName, boolean create, KeyEncoder keyEncoder, DataCompressor dataCompressor);
+    protected abstract T doCreateDb(final ClientConfig config);
 
-    public T getDb(String dbName, boolean create, KeyEncoder keyEncoder, DataCompressor dataCompressor)
+    public T getDb(ClientConfig config)
     {
-        T db = this.getOpenDb(dbName);
+        T db = this.getOpenDb(config.getName());
         if (db == null)
         {
-            final T rawDb = (T) doCreateDb(dbName, create, keyEncoder, dataCompressor);
-            dbs.put(dbName, rawDb);
+            final T rawDb = doCreateDb(config);
+            dbs.put(config.getName(), rawDb);
             return rawDb;
         }
         return db;
@@ -54,15 +51,6 @@ public abstract class KeyValueDbManager<T extends BaseKeyValueDb> implements Clo
     private T getOpenDb(String name)
     {
         return this.dbs.get(name);
-    }
-
-    protected void close(String name)
-    {
-        final T db = this.getOpenDb(name);
-        if (db != null)
-        {
-            doClose(db);
-        }
     }
 
     private void doClose(final T db)

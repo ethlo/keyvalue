@@ -40,9 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ethlo.binary.UnsignedUtil;
 import com.ethlo.keyvalue.MutableKeyValueDb;
-import com.ethlo.keyvalue.compression.NopDataCompressor;
 import com.ethlo.keyvalue.keys.ByteArrayKey;
-import com.ethlo.keyvalue.keys.encoders.HexKeyEncoder;
 import com.ethlo.keyvalue.test.MutateKeyValueDbTest;
 
 @Transactional
@@ -168,6 +166,6 @@ class StandardMutateTest extends MutateKeyValueDbTest
     @Override
     protected MutableKeyValueDb<ByteArrayKey, byte[]> getMutableKeyValueDb()
     {
-        return mysqlClientManager.getDb("_kvtest", true, new HexKeyEncoder(), new NopDataCompressor());
+        return mysqlClientManager.getDb(MysqlClientConfig.withName("_kvtest"));
     }
 }

@@ -27,9 +27,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ethlo.keyvalue.KeyValueDb;
-import com.ethlo.keyvalue.compression.NopDataCompressor;
 import com.ethlo.keyvalue.keys.ByteArrayKey;
-import com.ethlo.keyvalue.keys.encoders.HexKeyEncoder;
 import com.ethlo.keyvalue.test.KeyValueDbTest;
 
 @Transactional
@@ -43,6 +41,6 @@ public class StandardTest extends KeyValueDbTest
     @Override
     protected KeyValueDb<ByteArrayKey, byte[]> getDb()
     {
-        return mysqlClientManager.getDb("test", true, new HexKeyEncoder(), new NopDataCompressor());
+        return mysqlClientManager.getDb(MysqlClientConfig.withName("test"));
     }
 }

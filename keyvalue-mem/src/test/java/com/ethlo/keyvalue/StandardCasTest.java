@@ -42,6 +42,6 @@ public class StandardCasTest extends CasKeyValueDbTest
     @Override
     protected CasKeyValueDb<ByteArrayKey, byte[], Long> getCasKeyValueDb()
     {
-        return hashmapKeyValueDbManager.getDb("_kvtest", true, new HexKeyEncoder(), new NopDataCompressor());
+        return hashmapKeyValueDbManager.getDb(ClientConfig.withName("_kvtest"));
     }
 }

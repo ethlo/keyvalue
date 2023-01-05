@@ -41,6 +41,6 @@ class StandardMutateTest extends MutateKeyValueDbTest
     @Override
     protected MutableKeyValueDb<ByteArrayKey, byte[]> getMutableKeyValueDb()
     {
-        return hashmapKeyValueDbManager.getDb("_kvtest", true, new HexKeyEncoder(), new NopDataCompressor());
+        return hashmapKeyValueDbManager.getDb(ClientConfig.withName("_kvtest"));
     }
 }

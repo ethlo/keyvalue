@@ -20,14 +20,13 @@ package com.ethlo.keyvalue.hashmap;
  * #L%
  */
 
+import com.ethlo.keyvalue.ClientConfig;
 import com.ethlo.keyvalue.KeyValueDbManager;
-import com.ethlo.keyvalue.compression.DataCompressor;
-import com.ethlo.keyvalue.keys.encoders.KeyEncoder;
 
 public class HashmapKeyValueDbManager extends KeyValueDbManager<HashmapKeyValueDb>
 {
     @Override
-    protected HashmapKeyValueDb doCreateDb(final String dbName, final boolean create, final KeyEncoder keyEncoder, final DataCompressor dataCompressor)
+    protected HashmapKeyValueDb doCreateDb(ClientConfig config)
     {
         return new HashmapKeyValueDbImpl();
     }

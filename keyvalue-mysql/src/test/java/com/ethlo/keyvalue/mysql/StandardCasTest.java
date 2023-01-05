@@ -43,6 +43,6 @@ public class StandardCasTest extends CasKeyValueDbTest
     @Override
     protected CasKeyValueDb<ByteArrayKey, byte[], Long> getCasKeyValueDb()
     {
-        return mysqlClientManager.getDb("_kvtest", true, new HexKeyEncoder(), new NopDataCompressor());
+        return mysqlClientManager.getDb(MysqlClientConfig.withName("_kvtest"));
     }
 }

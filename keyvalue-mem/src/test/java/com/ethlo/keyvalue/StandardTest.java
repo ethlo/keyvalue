@@ -41,6 +41,6 @@ public class StandardTest extends KeyValueDbTest
     @Override
     protected KeyValueDb<ByteArrayKey, byte[]> getDb()
     {
-        return hashmapKeyValueDbManager.getDb("test", true, new HexKeyEncoder(), new NopDataCompressor());
+        return hashmapKeyValueDbManager.getDb(ClientConfig.withName("test"));
     }
 }

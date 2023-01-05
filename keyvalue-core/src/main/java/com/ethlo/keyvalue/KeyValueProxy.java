@@ -27,16 +27,16 @@ import java.lang.reflect.Proxy;
 
 public class KeyValueProxy
 {
-    public static <T> T proxy(Object target, Class<T>... types)
+    public static <T> T proxy(Object target, Class<T> type)
     {
-        return (T) Proxy.newProxyInstance(
-                types[0].getClassLoader(),
-                types,
-                new PassthroughHandler(target)
-        );
+        return type.cast(Proxy.newProxyInstance(
+                type.getClassLoader(),
+                new Class[]{type},
+                new PassThroughHandler(target)
+        ));
     }
 
-    public record PassthroughHandler(Object target) implements InvocationHandler
+    public record PassThroughHandler(Object target) implements InvocationHandler
     {
         @Override
         public Object invoke(Object obj, Method method, Object[] args) throws Throwable
@@ -57,7 +57,7 @@ public class KeyValueProxy
         if (Proxy.isProxyClass(proxy.getClass()))
         {
             final InvocationHandler invocationHandler = Proxy.getInvocationHandler(proxy);
-            return ((PassthroughHandler) invocationHandler).target;
+            return ((PassThroughHandler) invocationHandler).target;
         }
         return proxy;
     }

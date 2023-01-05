@@ -24,9 +24,8 @@ import javax.sql.DataSource;
 
 import org.springframework.dao.DataAccessResourceFailureException;
 
+import com.ethlo.keyvalue.ClientConfig;
 import com.ethlo.keyvalue.KeyValueDbManager;
-import com.ethlo.keyvalue.compression.DataCompressor;
-import com.ethlo.keyvalue.keys.encoders.KeyEncoder;
 
 public class MysqlClientManagerImpl extends KeyValueDbManager<MysqlClient>
 {
@@ -40,16 +39,16 @@ public class MysqlClientManagerImpl extends KeyValueDbManager<MysqlClient>
     }
 
     @Override
-    public Object doCreateDb(String tableName, boolean allowCreate, KeyEncoder keyEncoder, DataCompressor dataCompressor)
+    public MysqlClient doCreateDb(final ClientConfig mysqlClientConfig)
     {
-        if (!allowCreate && !this.mysqlUtil.tableExists(tableName))
+        if (!this.mysqlUtil.tableExists(mysqlClientConfig.getName()))
         {
-            throw new DataAccessResourceFailureException("No such database: " + tableName);
+            throw new DataAccessResourceFailureException("No such database: " + mysqlClientConfig.getName());
         }
         else
         {
-            this.mysqlUtil.createTable(tableName);
+            this.mysqlUtil.createTable(mysqlClientConfig.getName());
         }
-        return new MysqlClientImpl(tableName, dataSource, keyEncoder, dataCompressor);
+        return new MysqlClientImpl((MysqlClientConfig) mysqlClientConfig, dataSource);
     }
 }
