@@ -22,8 +22,6 @@ package com.ethlo.keyvalue.mysql;
 
 import javax.sql.DataSource;
 
-import org.springframework.dao.DataAccessResourceFailureException;
-
 import com.ethlo.keyvalue.ClientConfig;
 import com.ethlo.keyvalue.KeyValueDbManager;
 
@@ -41,14 +39,7 @@ public class MysqlClientManagerImpl extends KeyValueDbManager<MysqlClient>
     @Override
     public MysqlClient doCreateDb(final ClientConfig mysqlClientConfig)
     {
-        if (!this.mysqlUtil.tableExists(mysqlClientConfig.getName()))
-        {
-            throw new DataAccessResourceFailureException("No such database: " + mysqlClientConfig.getName());
-        }
-        else
-        {
-            this.mysqlUtil.createTable(mysqlClientConfig.getName());
-        }
+        mysqlUtil.createTable(mysqlClientConfig.getName());
         return new MysqlClientImpl((MysqlClientConfig) mysqlClientConfig, dataSource);
     }
 }

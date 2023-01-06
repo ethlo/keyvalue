@@ -365,9 +365,10 @@ public class MysqlClientImpl implements MysqlClient
                     }
 
                     // 2. Create new connection and try again
-                    logger.warn("Starting new iteration from after key '{}'", startKey.getValue());
-                    iterator.set(createIterator(tpl, psc, new AbstractMap.SimpleEntry<>(startKey.getKey(), iter.lastSeenKey), batchSize));
-                    lastRetryKey.set(iter.lastSeenKey);
+                    final String lastSeenKey = iter.lastSeenKey;
+                    logger.warn("Starting new iteration from after key '{}'", lastSeenKey);
+                    iterator.set(createIterator(tpl, psc, new AbstractMap.SimpleEntry<>(startKey.getKey(), lastSeenKey), batchSize));
+                    lastRetryKey.set(lastSeenKey);
                     return iterator.get().computeNext();
                 }
                 throw new DataAccessResourceFailureException("An unexpected error occurred during iteration of data", iter.exception);
